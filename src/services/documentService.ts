@@ -301,21 +301,3 @@ export const getWebImage = async (folderPath: string, imagePath: string): Promis
   return null;
 };
 
-/**
- * Load all image files from a folder into cache
- */
-async function loadImagesFromDirectory(dirHandle: FileSystemDirectoryHandle, path: string): Promise<void> {
-  try {
-    for await (const entry of dirHandle.values()) {
-      if (entry.kind === 'file') {
-        const fileHandle = entry as FileSystemFileHandle;
-        const file = await fileHandle.getFile();
-        if (file.type.startsWith('image/')) {
-          webFileCache.set(`${path}/${entry.name}`, file);
-        }
-      }
-    }
-  } catch (error) {
-    console.error(`Failed to load images from ${path}:`, error);
-  }
-}

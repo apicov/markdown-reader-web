@@ -5,7 +5,7 @@
  * Handles card review scheduling and rating updates.
  */
 
-import { FSRS, Rating as FSRSRating, State, createEmptyCard } from 'ts-fsrs';
+import { FSRS, Rating as FSRSRating, State } from 'ts-fsrs';
 import type { Card, Rating, ReviewDirection, FSRSData } from '../types';
 import { cardDb } from './cardDatabaseService';
 
@@ -20,6 +20,16 @@ interface FSRSCard {
   lapses: number;
   state: State;
   last_review?: Date;
+  learning_steps: number;
+}
+
+// Type for accessing FSRS scheduling results
+// ts-fsrs returns IPreview which uses string keys ('again', 'hard', 'good', 'easy')
+interface FSRSSchedulingResult {
+  again: { card: FSRSCard };
+  hard: { card: FSRSCard };
+  good: { card: FSRSCard };
+  easy: { card: FSRSCard };
 }
 
 class FSRSService {
@@ -47,6 +57,7 @@ class FSRSService {
       lapses: fsrsData.lapses,
       state: fsrsData.state as State,
       last_review: fsrsData.last_review ? new Date(fsrsData.last_review) : undefined,
+      learning_steps: 0, // Default value for learning steps
     };
   }
 
@@ -74,6 +85,24 @@ class FSRSService {
   }
 
   /**
+   * Get the key name for accessing scheduling results
+   */
+  private getRatingKey(rating: FSRSRating): 'again' | 'hard' | 'good' | 'easy' {
+    switch (rating) {
+      case FSRSRating.Again:
+        return 'again';
+      case FSRSRating.Hard:
+        return 'hard';
+      case FSRSRating.Good:
+        return 'good';
+      case FSRSRating.Easy:
+        return 'easy';
+      default:
+        return 'good';
+    }
+  }
+
+  /**
    * Process a card review and return updated scheduling data
    */
   async reviewCard(
@@ -92,11 +121,12 @@ class FSRSService {
     const now = new Date();
 
     // Schedule the card based on rating
-    const schedulingCards = this.fsrs.repeat(fsrsCard, now);
     const fsrsRating = this.toFSRSRating(rating);
+    const schedulingInfo = this.fsrs.repeat(fsrsCard, now) as unknown as FSRSSchedulingResult;
 
     // Get the updated card for this rating
-    const updatedFSRSCard = schedulingCards[fsrsRating].card;
+    const ratingKey = this.getRatingKey(fsrsRating);
+    const updatedFSRSCard = schedulingInfo[ratingKey].card;
 
     // Update the card's FSRS data for this direction
     const updatedCard = { ...latestCard };
@@ -121,13 +151,13 @@ class FSRSService {
     const fsrsCard = this.toFSRSCard(fsrsData);
     const now = new Date();
 
-    const schedulingCards = this.fsrs.repeat(fsrsCard, now);
+    const schedulingInfo = this.fsrs.repeat(fsrsCard, now) as unknown as FSRSSchedulingResult;
 
     return {
-      again: schedulingCards[FSRSRating.Again].card.scheduled_days,
-      hard: schedulingCards[FSRSRating.Hard].card.scheduled_days,
-      good: schedulingCards[FSRSRating.Good].card.scheduled_days,
-      easy: schedulingCards[FSRSRating.Easy].card.scheduled_days,
+      again: schedulingInfo.again.card.scheduled_days,
+      hard: schedulingInfo.hard.card.scheduled_days,
+      good: schedulingInfo.good.card.scheduled_days,
+      easy: schedulingInfo.easy.card.scheduled_days,
     };
   }
 

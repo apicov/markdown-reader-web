@@ -31,7 +31,6 @@ import {
   PlayArrow as PlayIcon,
   Delete as DeleteIcon,
 } from '@mui/icons-material';
-import { useTheme } from '../contexts/ThemeContext';
 import type { Deck } from '../types';
 import { cardDb } from '../services/cardDatabaseService';
 import { LoadingSpinner } from './LoadingSpinner';
@@ -46,7 +45,6 @@ export const DecksScreen: React.FC<DecksScreenProps> = ({
   onBack,
   onReviewDeck,
 }) => {
-  const { isDarkMode } = useTheme();
   const [decks, setDecks] = useState<Deck[]>([]);
   const [deckStats, setDeckStats] = useState<Map<string, { total: number; due: number; new: number }>>(new Map());
   const [isLoading, setIsLoading] = useState(true);

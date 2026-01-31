@@ -144,12 +144,14 @@ export interface Card {
 /**
  * Review rating options (FSRS standard)
  */
-export enum Rating {
-  Again = 1,
-  Hard = 2,
-  Good = 3,
-  Easy = 4,
-}
+export const Rating = {
+  Again: 1,
+  Hard: 2,
+  Good: 3,
+  Easy: 4,
+} as const;
+
+export type Rating = typeof Rating[keyof typeof Rating];
 
 /**
  * Card due for review with direction
