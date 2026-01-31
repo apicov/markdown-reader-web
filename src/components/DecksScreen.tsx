@@ -15,7 +15,6 @@ import {
   ListItem,
   ListItemButton,
   ListItemText,
-  CircularProgress,
   Button,
   Container,
   Dialog,
@@ -24,6 +23,7 @@ import {
   DialogActions,
   TextField,
   Fab,
+  CircularProgress,
 } from '@mui/material';
 import {
   ArrowBack as BackIcon,
@@ -34,6 +34,8 @@ import {
 import { useTheme } from '../contexts/ThemeContext';
 import type { Deck } from '../types';
 import { cardDb } from '../services/cardDatabaseService';
+import { LoadingSpinner } from './LoadingSpinner';
+import { EmptyState } from './EmptyState';
 
 interface DecksScreenProps {
   onBack: () => void;
@@ -144,41 +146,16 @@ export const DecksScreen: React.FC<DecksScreenProps> = ({
       {/* Content */}
       <Container sx={{ flex: 1, py: 3, overflow: 'auto' }}>
         {isLoading ? (
-          <Box
-            sx={{
-              display: 'flex',
-              justifyContent: 'center',
-              alignItems: 'center',
-              height: '100%',
-            }}
-          >
-            <CircularProgress />
-          </Box>
+          <LoadingSpinner />
         ) : decks.length === 0 ? (
-          <Box
-            sx={{
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              justifyContent: 'center',
-              height: '100%',
-              gap: 2,
+          <EmptyState
+            title="No decks yet"
+            description="Create a deck or save cards while reading documents"
+            action={{
+              label: "Create Deck",
+              onClick: () => setCreateDialogOpen(true),
             }}
-          >
-            <Typography variant="h6" color="text.secondary">
-              No decks yet
-            </Typography>
-            <Typography variant="body2" color="text.secondary">
-              Create a deck or save cards while reading documents
-            </Typography>
-            <Button
-              variant="contained"
-              onClick={() => setCreateDialogOpen(true)}
-              sx={{ mt: 2 }}
-            >
-              Create Deck
-            </Button>
-          </Box>
+          />
         ) : (
           <List>
             {decks.map((deck) => {

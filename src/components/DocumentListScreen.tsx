@@ -15,7 +15,6 @@ import {
   ListItem,
   ListItemButton,
   ListItemText,
-  CircularProgress,
   Button,
   Container,
 } from '@mui/material';
@@ -27,6 +26,8 @@ import {
   Folder as FolderIcon,
   Style as CardsIcon,
 } from '@mui/icons-material';
+import { LoadingSpinner } from './LoadingSpinner';
+import { EmptyState } from './EmptyState';
 import { Capacitor } from '@capacitor/core';
 import { useTheme } from '../contexts/ThemeContext';
 import { useSettings } from '../contexts/SettingsContext';
@@ -87,10 +88,7 @@ export const DocumentListScreen: React.FC<DocumentListScreenProps> = ({
   };
 
   const handlePickFolder = async () => {
-    console.log('Pick folder button clicked');
-
     // Check if File System Access API is supported
-    // @ts-ignore
     if (!('showDirectoryPicker' in window)) {
       alert('File System Access API is not supported in this browser. Please use Chrome or Edge.');
       return;
@@ -98,22 +96,17 @@ export const DocumentListScreen: React.FC<DocumentListScreenProps> = ({
 
     setIsLoading(true);
     try {
-      console.log('Requesting directory access...');
       const handle = await requestDirectoryAccess();
-      console.log('Directory handle received:', handle);
 
       if (handle) {
         // Load documents from the selected folder
-        console.log('Loading documents...');
         const docs = await getDocuments('');
-        console.log('Documents loaded:', docs.length);
         setDocuments(docs);
 
         if (docs.length === 0) {
           alert('No document folders found. Make sure your folder contains subdirectories with .md files.');
         }
       } else {
-        console.log('No handle returned');
         alert('Folder selection was cancelled or failed.');
       }
     } catch (error) {
@@ -157,82 +150,32 @@ export const DocumentListScreen: React.FC<DocumentListScreenProps> = ({
       {/* Content */}
       <Container sx={{ flex: 1, py: 3, overflow: 'auto' }}>
         {needsFolderPicker ? (
-          <Box
-            sx={{
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              justifyContent: 'center',
-              height: '100%',
-              gap: 2,
+          <EmptyState
+            icon={<FolderIcon sx={{ fontSize: 64, opacity: 0.5 }} />}
+            title="No folder selected"
+            description="Pick a folder containing your markdown documents"
+            action={{
+              label: "Pick Folder",
+              onClick: handlePickFolder,
             }}
-          >
-            <FolderIcon sx={{ fontSize: 64, opacity: 0.5 }} />
-            <Typography variant="h6" color="text.secondary">
-              No folder selected
-            </Typography>
-            <Typography variant="body2" color="text.secondary" textAlign="center">
-              Pick a folder containing your markdown documents
-            </Typography>
-            <Button
-              variant="contained"
-              onClick={handlePickFolder}
-              disabled={isLoading}
-              sx={{ mt: 2 }}
-            >
-              Pick Folder
-            </Button>
-          </Box>
+          />
         ) : !settings.docsPath && !isWeb ? (
-          <Box
-            sx={{
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              justifyContent: 'center',
-              height: '100%',
-              gap: 2,
+          <EmptyState
+            icon={<FolderIcon sx={{ fontSize: 64, opacity: 0.5 }} />}
+            title="No documents folder selected"
+            description="Please go to Settings and enter the path to your documents folder"
+            action={{
+              label: "Open Settings",
+              onClick: onOpenSettings,
             }}
-          >
-            <FolderIcon sx={{ fontSize: 64, opacity: 0.5 }} />
-            <Typography variant="h6" color="text.secondary">
-              No documents folder selected
-            </Typography>
-            <Typography variant="body2" color="text.secondary" textAlign="center">
-              Please go to Settings and enter the path to your documents folder
-            </Typography>
-            <Button variant="contained" onClick={onOpenSettings} sx={{ mt: 2 }}>
-              Open Settings
-            </Button>
-          </Box>
+          />
         ) : isLoading ? (
-          <Box
-            sx={{
-              display: 'flex',
-              justifyContent: 'center',
-              alignItems: 'center',
-              height: '100%',
-            }}
-          >
-            <CircularProgress />
-          </Box>
+          <LoadingSpinner />
         ) : documents.length === 0 ? (
-          <Box
-            sx={{
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              justifyContent: 'center',
-              height: '100%',
-            }}
-          >
-            <Typography variant="h6" color="text.secondary">
-              No documents found
-            </Typography>
-            <Typography variant="body2" color="text.secondary">
-              Check if your selected folder contains markdown files
-            </Typography>
-          </Box>
+          <EmptyState
+            title="No documents found"
+            description="Check if your selected folder contains markdown files"
+          />
         ) : (
           <List>
             {documents.map((doc) => (

@@ -15,7 +15,6 @@ import {
   Card,
   CardContent,
   Button,
-  CircularProgress,
   LinearProgress,
 } from '@mui/material';
 import {
@@ -25,6 +24,8 @@ import type { Card as FlashCard, ReviewDirection, Deck } from '../types';
 import { Rating } from '../types';
 import { cardDb } from '../services/cardDatabaseService';
 import { fsrsService } from '../services/fsrsService';
+import { LoadingSpinner } from './LoadingSpinner';
+import { EmptyState } from './EmptyState';
 
 interface ReviewScreenProps {
   deckId: string;
@@ -94,18 +95,7 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({
   };
 
   if (isLoading) {
-    return (
-      <Box
-        sx={{
-          display: 'flex',
-          justifyContent: 'center',
-          alignItems: 'center',
-          height: '100vh',
-        }}
-      >
-        <CircularProgress />
-      </Box>
-    );
+    return <LoadingSpinner />;
   }
 
   if (queue.length === 0) {
@@ -122,25 +112,14 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({
           </Toolbar>
         </AppBar>
 
-        <Box
-          sx={{
-            flex: 1,
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: 2,
-            p: 3,
+        <EmptyState
+          title="All done! 🎉"
+          description="No cards due for review right now."
+          action={{
+            label: "Back to Decks",
+            onClick: onBack,
           }}
-        >
-          <Typography variant="h5">All done! 🎉</Typography>
-          <Typography variant="body1" color="text.secondary">
-            No cards due for review right now.
-          </Typography>
-          <Button variant="contained" onClick={onBack} sx={{ mt: 2 }}>
-            Back to Decks
-          </Button>
-        </Box>
+        />
       </Box>
     );
   }

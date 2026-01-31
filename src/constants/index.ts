@@ -89,6 +89,9 @@ export const IMAGE_BATCH_SIZE = 2;
 /** Delay between image batches to prevent UI freezing (ms) */
 export const IMAGE_BATCH_DELAY_MS = 50;
 
+/** Maximum number of images to cache in memory */
+export const MAX_IMAGE_CACHE_SIZE = 100;
+
 // ============================================================================
 // UI & LAYOUT
 // ============================================================================

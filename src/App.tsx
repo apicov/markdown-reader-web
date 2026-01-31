@@ -43,9 +43,12 @@ function App() {
     setCurrentScreen('decks');
   };
 
+  const [decksRefreshKey, setDecksRefreshKey] = useState(0);
+
   const handleBackToDecks = () => {
     setSelectedDeckId(null);
     setCurrentScreen('decks');
+    setDecksRefreshKey(prev => prev + 1); // Force refresh when returning to decks
   };
 
   const handleReviewDeck = (deckId: string) => {
@@ -77,6 +80,7 @@ function App() {
 
         {currentScreen === 'decks' && (
           <DecksScreen
+            key={decksRefreshKey}
             onBack={handleBackToList}
             onReviewDeck={handleReviewDeck}
           />

@@ -71,19 +71,19 @@ export interface AppSettings {
  * FSRS scheduling data for a card direction
  */
 export interface FSRSData {
-  /** Current memory stability (how long until you forget) */
+  /** Current memory stability (days until predicted recall probability drops below threshold) */
   stability: number;
-  /** Card difficulty (intrinsic hardness) */
+  /** Card difficulty (intrinsic hardness, 0-10 scale) */
   difficulty: number;
-  /** Number of times reviewed */
+  /** Days elapsed since last review */
   elapsed_days: number;
-  /** Number of times reviewed in total */
+  /** Days scheduled for next review */
   scheduled_days: number;
-  /** Number of times reviewed */
+  /** Number of times reviewed (total review count) */
   reps: number;
-  /** Number of times failed (Again rating) */
+  /** Number of times failed (Again rating count) */
   lapses: number;
-  /** Current state: New, Learning, Review, or Relearning */
+  /** Current FSRS state: 0=New, 1=Learning, 2=Review, 3=Relearning */
   state: number;
   /** Last review timestamp */
   last_review?: Date;

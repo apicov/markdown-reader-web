@@ -124,7 +124,7 @@ export const readMarkdownFile = async (filePath: string): Promise<string> => {
 /**
  * For web platform: Store directory handle and file cache
  */
-let webDirectoryHandle: any = null;
+let webDirectoryHandle: FileSystemDirectoryHandle | null = null;
 let webFileCache: Map<string, File> = new Map();
 
 /**
@@ -132,15 +132,13 @@ let webFileCache: Map<string, File> = new Map();
  *
  * @returns DirectoryHandle if successful, null otherwise
  */
-export const requestDirectoryAccess = async (): Promise<any> => {
+export const requestDirectoryAccess = async (): Promise<FileSystemDirectoryHandle | boolean | null> => {
   if (Capacitor.getPlatform() !== 'web') {
     return true;
   }
 
   try {
-    // @ts-ignore - File System Access API
     if ('showDirectoryPicker' in window) {
-      // @ts-ignore
       webDirectoryHandle = await window.showDirectoryPicker({
         mode: 'read',
       });
@@ -168,11 +166,10 @@ async function loadWebFileCache(): Promise<void> {
   webFileCache.clear();
 
   try {
-    // @ts-ignore
     for await (const entry of webDirectoryHandle.values()) {
       if (entry.kind === 'directory') {
         // Recursively load files from subdirectory
-        await loadFilesFromDirectory(entry, entry.name);
+        await loadFilesFromDirectory(entry as FileSystemDirectoryHandle, entry.name);
       }
     }
   } catch (error) {
@@ -183,12 +180,12 @@ async function loadWebFileCache(): Promise<void> {
 /**
  * Recursively load markdown and image files from a directory
  */
-async function loadFilesFromDirectory(dirHandle: any, path: string): Promise<void> {
+async function loadFilesFromDirectory(dirHandle: FileSystemDirectoryHandle, path: string): Promise<void> {
   try {
-    // @ts-ignore
     for await (const entry of dirHandle.values()) {
       if (entry.kind === 'file') {
-        const file = await entry.getFile();
+        const fileHandle = entry as FileSystemFileHandle;
+        const file = await fileHandle.getFile();
         // Cache markdown files
         if (entry.name.toLowerCase().endsWith('.md')) {
           webFileCache.set(`${path}/${entry.name}`, file);
@@ -215,7 +212,6 @@ export async function getWebDocuments(): Promise<Document[]> {
   const documents: Document[] = [];
 
   try {
-    // @ts-ignore
     for await (const entry of webDirectoryHandle.values()) {
       if (entry.kind === 'directory') {
         documents.push({
@@ -253,23 +249,15 @@ export async function findMarkdownInWebFolder(folderPath: string): Promise<strin
  * Read markdown file from web cache
  */
 export async function readWebMarkdownFile(filePath: string): Promise<string> {
-  console.log('[readWebMarkdownFile] Reading:', filePath);
-  console.log('[readWebMarkdownFile] Cache has:', Array.from(webFileCache.keys()));
-
   const file = webFileCache.get(filePath);
 
   if (!file) {
     console.error('File not found in cache:', filePath);
-    console.error('Available files:', Array.from(webFileCache.keys()));
     return 'ERROR: File not found in cache';
   }
 
-  console.log('[readWebMarkdownFile] Found file:', file.name, file.type, file.size);
-
   try {
     const text = await file.text();
-    console.log('[readWebMarkdownFile] Read', text.length, 'characters');
-    console.log('[readWebMarkdownFile] First 100 chars:', text.substring(0, 100));
     return text;
   } catch (error) {
     console.error('Failed to read file:', error);
@@ -316,12 +304,12 @@ export const getWebImage = async (folderPath: string, imagePath: string): Promis
 /**
  * Load all image files from a folder into cache
  */
-async function loadImagesFromDirectory(dirHandle: any, path: string): Promise<void> {
+async function loadImagesFromDirectory(dirHandle: FileSystemDirectoryHandle, path: string): Promise<void> {
   try {
-    // @ts-ignore
     for await (const entry of dirHandle.values()) {
       if (entry.kind === 'file') {
-        const file = await entry.getFile();
+        const fileHandle = entry as FileSystemFileHandle;
+        const file = await fileHandle.getFile();
         if (file.type.startsWith('image/')) {
           webFileCache.set(`${path}/${entry.name}`, file);
         }

@@ -46,25 +46,20 @@ export const getCachedDocumentData = async (
     const cached = await getItem<DocumentCache>(cacheKey);
 
     if (!cached) {
-      console.log(`[Cache] MISS - No cache found for: ${documentId}`);
       return null;
     }
 
     // Validate cache version
     if (cached.version !== CACHE_VERSION) {
-      console.log(`[Cache] MISS - Version mismatch for: ${documentId}`);
       return null;
     }
 
     // Validate content hasn't changed
     const currentHash = generateHash(markdownContent);
     if (cached.contentHash !== currentHash) {
-      console.log(`[Cache] MISS - Content changed for: ${documentId}`);
       return null;
     }
 
-    const cacheAge = (Date.now() - cached.timestamp) / 1000;
-    console.log(`[Cache] HIT ✓ - Using cached data for: ${documentId} (age: ${cacheAge.toFixed(1)}s, ${cached.toc.length} headings, ${cached.imagePaths.length} images)`);
     return cached;
   } catch (error) {
     console.error('[Cache] ERROR - Failed to get cached data:', error);
@@ -95,7 +90,6 @@ export const cacheDocumentData = async (
     };
 
     await setItem(cacheKey, cacheData);
-    console.log(`[Cache] SAVED - Cached data for: ${documentId} (${toc.length} headings, ${imagePaths.length} images)`);
   } catch (error) {
     console.error('[Cache] ERROR - Failed to cache document data:', error);
   }
@@ -122,7 +116,6 @@ export const clearAllCaches = async (): Promise<void> => {
     const cacheKeys = allKeys.filter(key => key.startsWith(CACHE_PREFIX));
 
     await Promise.all(cacheKeys.map(key => removeItem(key)));
-    console.log(`[Cache] Cleared ${cacheKeys.length} cached documents`);
   } catch (error) {
     console.error('Failed to clear all caches:', error);
   }

@@ -16,7 +16,6 @@ import {
   Toolbar,
   Typography,
   IconButton,
-  CircularProgress,
   Drawer,
   List,
   ListItem,
@@ -32,7 +31,9 @@ import {
   Checkbox,
   MenuItem,
   Slider,
+  CircularProgress,
 } from '@mui/material';
+import { LoadingSpinner } from './LoadingSpinner';
 import {
   ArrowBack as BackIcon,
   Menu as MenuIcon,
@@ -59,7 +60,7 @@ import {
 } from '../services/readingPositionService';
 import { getCachedDocumentData, cacheDocumentData } from '../services/cacheService';
 import { cardDb } from '../services/cardDatabaseService';
-import { AUTO_SAVE_INTERVAL_MS, MIN_FONT_SIZE, MAX_FONT_SIZE } from '../constants';
+import { AUTO_SAVE_INTERVAL_MS, MIN_FONT_SIZE, MAX_FONT_SIZE, MAX_IMAGE_CACHE_SIZE } from '../constants';
 import { Capacitor } from '@capacitor/core';
 
 interface MarkdownReaderProps {
@@ -279,6 +280,13 @@ export const MarkdownReader: React.FC<MarkdownReaderProps> = ({
             if (dataUrl) {
               setImageSrc(dataUrl);
               // Update cache using ref (not state) to avoid triggering re-renders
+              // Implement LRU cache: remove oldest entry if cache is full
+              if (imageCacheRef.current.size >= MAX_IMAGE_CACHE_SIZE) {
+                const firstKey = imageCacheRef.current.keys().next().value;
+                if (firstKey) {
+                  imageCacheRef.current.delete(firstKey);
+                }
+              }
               imageCacheRef.current.set(src, dataUrl);
             } else {
               console.warn('Image not found in cache:', src);
@@ -339,16 +347,7 @@ export const MarkdownReader: React.FC<MarkdownReaderProps> = ({
         }}
       >
         {isLoading ? (
-          <Box
-            sx={{
-              display: 'flex',
-              justifyContent: 'center',
-              alignItems: 'center',
-              height: '100%',
-            }}
-          >
-            <CircularProgress />
-          </Box>
+          <LoadingSpinner />
         ) : (
           <MarkdownContent
             markdown={markdown}
