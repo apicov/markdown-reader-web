@@ -8,6 +8,7 @@
 import { Filesystem, Directory as FilesystemDirectory, Encoding } from '@capacitor/filesystem';
 import { Capacitor } from '@capacitor/core';
 import type { Document } from '../types';
+import DocumentProvider from '../plugins/documentProvider';
 
 /**
  * Retrieve list of document folders from a directory
@@ -26,21 +27,40 @@ export const getDocuments = async (docsPath: string): Promise<Document[]> => {
       // Web: Use File System Access API with directory handle
       return await getWebDocuments();
     } else {
-      // Mobile: Use Capacitor Filesystem
+      console.log('[getDocuments] Mobile - docsPath:', docsPath, 'mobileContentUri:', mobileContentUri);
+
+      // Mobile: Check if we have a content URI
+      if (mobileContentUri) {
+        console.log('[getDocuments] Using content URI:', mobileContentUri);
+        return await getMobileDocumentsFromContentUri();
+      }
+
+      // Fallback: Use Capacitor Filesystem with regular path
       if (!docsPath || docsPath.trim() === '') {
+        console.log('[getDocuments] No docsPath and no mobileContentUri, returning empty');
         return [];
       }
 
+      // Check if path is absolute (starts with /)
+      const isAbsolutePath = docsPath.startsWith('/');
+
+      console.log('[getDocuments] Reading path:', docsPath, 'isAbsolute:', isAbsolutePath);
+
       const result = await Filesystem.readdir({
         path: docsPath,
-        directory: FilesystemDirectory.ExternalStorage,
+        // Use absolute path if provided (from FilePicker), otherwise use ExternalStorage
+        ...(isAbsolutePath ? {} : { directory: FilesystemDirectory.ExternalStorage }),
       });
+
+      console.log('[getDocuments] Found files:', result.files.length);
+      console.log('[getDocuments] Files:', JSON.stringify(result.files, null, 2));
 
       const documents: Document[] = [];
 
       for (const file of result.files) {
         if (file.type === 'directory') {
           const fullPath = `${docsPath}/${file.name}`;
+          console.log('[getDocuments] Found book folder:', file.name, 'at', fullPath);
           documents.push({
             id: file.name,
             title: file.name,
@@ -50,6 +70,7 @@ export const getDocuments = async (docsPath: string): Promise<Document[]> => {
         }
       }
 
+      console.log('[getDocuments] Total documents found:', documents.length);
       return documents;
     }
   } catch (error) {
@@ -74,9 +95,26 @@ export const findMarkdownInFolder = async (
       // Web: Use cached file map
       return await findMarkdownInWebFolder(folderPath);
     } else {
+      // Mobile: Check if this is a content URI
+      if (folderPath.startsWith('content://')) {
+        const result = await DocumentProvider.listDirectory({ uri: folderPath });
+
+        for (const file of result.files) {
+          if (!file.isDirectory && file.name.toLowerCase().endsWith('.md')) {
+            return file.uri;
+          }
+        }
+
+        return null;
+      }
+
+      // Check if path is absolute (starts with /)
+      const isAbsolutePath = folderPath.startsWith('/');
+
       const result = await Filesystem.readdir({
         path: folderPath,
-        directory: FilesystemDirectory.ExternalStorage,
+        // Use absolute path if provided (from FilePicker), otherwise use ExternalStorage
+        ...(isAbsolutePath ? {} : { directory: FilesystemDirectory.ExternalStorage }),
       });
 
       for (const file of result.files) {
@@ -107,9 +145,19 @@ export const readMarkdownFile = async (filePath: string): Promise<string> => {
       // Web: Use cached files
       return await readWebMarkdownFile(filePath);
     } else {
+      // Mobile: Check if this is a content URI
+      if (filePath.startsWith('content://')) {
+        const result = await DocumentProvider.readFile({ uri: filePath });
+        return result.content;
+      }
+
+      // Check if path is absolute (starts with /)
+      const isAbsolutePath = filePath.startsWith('/');
+
       const result = await Filesystem.readFile({
         path: filePath,
-        directory: FilesystemDirectory.ExternalStorage,
+        // Use absolute path if provided (from FilePicker), otherwise use ExternalStorage
+        ...(isAbsolutePath ? {} : { directory: FilesystemDirectory.ExternalStorage }),
         encoding: Encoding.UTF8,
       });
 
@@ -128,12 +176,36 @@ let webDirectoryHandle: FileSystemDirectoryHandle | null = null;
 let webFileCache: Map<string, File> = new Map();
 
 /**
+ * For mobile platform: Store content URI from directory picker
+ */
+let mobileContentUri: string | null = null;
+
+/**
  * Request directory access on web platform using File System Access API
  *
  * @returns DirectoryHandle if successful, null otherwise
  */
-export const requestDirectoryAccess = async (): Promise<FileSystemDirectoryHandle | boolean | null> => {
-  if (Capacitor.getPlatform() !== 'web') {
+export const requestDirectoryAccess = async (contentUri?: string): Promise<FileSystemDirectoryHandle | boolean | null> => {
+  const platform = Capacitor.getPlatform();
+
+  if (platform !== 'web') {
+    // Mobile: Store the content URI and take persistable permissions
+    if (contentUri) {
+      console.log('[requestDirectoryAccess] Storing content URI:', contentUri);
+
+      // Take persistable URI permission for long-term access
+      try {
+        await DocumentProvider.takePersistableUriPermission({ uri: contentUri });
+        console.log('[requestDirectoryAccess] Persistable URI permission granted');
+      } catch (error) {
+        console.error('[requestDirectoryAccess] Failed to take persistable URI permission:', error);
+        console.error('[requestDirectoryAccess] Error details:', JSON.stringify(error, null, 2));
+        // Continue anyway, it might still work
+      }
+
+      mobileContentUri = contentUri;
+      return true;
+    }
     return true;
   }
 
@@ -230,6 +302,38 @@ export async function getWebDocuments(): Promise<Document[]> {
 }
 
 /**
+ * Get documents from mobile content URI using DocumentProvider plugin
+ */
+async function getMobileDocumentsFromContentUri(): Promise<Document[]> {
+  if (!mobileContentUri) {
+    return [];
+  }
+
+  try {
+    const result = await DocumentProvider.listDirectory({ uri: mobileContentUri });
+    const documents: Document[] = [];
+
+    for (const file of result.files) {
+      if (file.isDirectory) {
+        documents.push({
+          id: file.name,
+          title: file.name,
+          folderPath: file.uri, // Store the content URI
+          markdownFile: '',
+        });
+      }
+    }
+
+    return documents;
+  } catch (error) {
+    console.error('Failed to list mobile directory:', error);
+    console.error('Error details:', JSON.stringify(error, null, 2));
+    console.error('Error message:', error instanceof Error ? error.message : String(error));
+    return [];
+  }
+}
+
+/**
  * Find markdown file in web folder
  */
 export async function findMarkdownInWebFolder(folderPath: string): Promise<string | null> {
@@ -270,6 +374,13 @@ export async function readWebMarkdownFile(filePath: string): Promise<string> {
  */
 export const hasWebDirectoryAccess = (): boolean => {
   return webDirectoryHandle !== null;
+};
+
+/**
+ * Check if mobile directory access is granted
+ */
+export const hasMobileDirectoryAccess = (): boolean => {
+  return mobileContentUri !== null;
 };
 
 /**

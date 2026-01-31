@@ -28,6 +28,7 @@ import {
 import { LoadingSpinner } from './LoadingSpinner';
 import { EmptyState } from './EmptyState';
 import { Capacitor } from '@capacitor/core';
+import { FilePicker } from '@capawesome/capacitor-file-picker';
 import { useTheme } from '../contexts/ThemeContext';
 import { useSettings } from '../contexts/SettingsContext';
 import type { Document } from '../types';
@@ -50,7 +51,7 @@ export const DocumentListScreen: React.FC<DocumentListScreenProps> = ({
   onOpenDecks,
 }) => {
   const { isDarkMode, toggleTheme } = useTheme();
-  const { settings } = useSettings();
+  const { settings, updateSettings } = useSettings();
   const [documents, setDocuments] = useState<Document[]>([]);
   const [isLoading, setIsLoading] = useState(false);
 
@@ -64,6 +65,14 @@ export const DocumentListScreen: React.FC<DocumentListScreenProps> = ({
   const loadDocuments = async () => {
     setIsLoading(true);
     try {
+      const platform = Capacitor.getPlatform();
+
+      // On mobile, restore directory access with the saved URI
+      if (platform !== 'web' && settings.docsPath) {
+        console.log('[loadDocuments] Restoring directory access with URI:', settings.docsPath);
+        await requestDirectoryAccess(settings.docsPath);
+      }
+
       const docs = await getDocuments(settings.docsPath);
       setDocuments(docs);
     } catch (error) {
@@ -87,26 +96,62 @@ export const DocumentListScreen: React.FC<DocumentListScreenProps> = ({
   };
 
   const handlePickFolder = async () => {
-    // Check if File System Access API is supported
-    if (!('showDirectoryPicker' in window)) {
-      alert('File System Access API is not supported in this browser. Please use Chrome or Edge.');
-      return;
-    }
+    const platform = Capacitor.getPlatform();
 
     setIsLoading(true);
     try {
-      const handle = await requestDirectoryAccess();
+      if (platform === 'web') {
+        // Web: Use File System Access API
+        if (!('showDirectoryPicker' in window)) {
+          alert('File System Access API is not supported in this browser. Please use Chrome or Edge.');
+          setIsLoading(false);
+          return;
+        }
 
-      if (handle) {
-        // Load documents from the selected folder
-        const docs = await getDocuments('');
-        setDocuments(docs);
+        const handle = await requestDirectoryAccess();
 
-        if (docs.length === 0) {
-          alert('No document folders found. Make sure your folder contains subdirectories with .md files.');
+        if (handle) {
+          // Load documents from the selected folder
+          const docs = await getDocuments('');
+          setDocuments(docs);
+
+          if (docs.length === 0) {
+            alert('No document folders found. Make sure your folder contains subdirectories with .md files.');
+          }
+        } else {
+          alert('Folder selection was cancelled or failed.');
         }
       } else {
-        alert('Folder selection was cancelled or failed.');
+        // Mobile: Use Capacitor FilePicker plugin
+        const result = await FilePicker.pickDirectory();
+
+        console.log('[handlePickFolder] FilePicker result:', JSON.stringify(result, null, 2));
+
+        // The FilePicker should return a URI on Android, not a path
+        const dirUri = (result as any).uri || result.path;
+
+        if (result && dirUri) {
+          console.log('[handlePickFolder] Selected URI/path:', dirUri);
+
+          // Store the content URI and load documents
+          await requestDirectoryAccess(dirUri);
+
+          // Save the URI to settings for future use
+          await updateSettings({ docsPath: dirUri });
+          console.log('[handlePickFolder] Saved URI to settings');
+
+          const docs = await getDocuments(dirUri);
+          setDocuments(docs);
+
+          console.log('[handlePickFolder] Documents found:', docs.length);
+
+          if (docs.length === 0) {
+            alert('No document folders found. Make sure your folder contains subdirectories with .md files.');
+          }
+        } else {
+          console.log('[handlePickFolder] No path/URI in result');
+          alert('Folder selection was cancelled or failed.');
+        }
       }
     } catch (error) {
       console.error('Failed to pick folder:', error);
@@ -117,7 +162,12 @@ export const DocumentListScreen: React.FC<DocumentListScreenProps> = ({
   };
 
   const isWeb = Capacitor.getPlatform() === 'web';
-  const needsFolderPicker = isWeb && !hasWebDirectoryAccess();
+  // Show folder picker if:
+  // - Web: no directory handle acquired
+  // - Mobile: no docsPath saved in settings
+  const needsFolderPicker = isWeb ? !hasWebDirectoryAccess() : !settings.docsPath;
+
+  console.log('[DocumentListScreen] Render - isWeb:', isWeb, 'needsFolderPicker:', needsFolderPicker, 'docsPath:', settings.docsPath, 'documents:', documents.length, 'isLoading:', isLoading);
 
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
