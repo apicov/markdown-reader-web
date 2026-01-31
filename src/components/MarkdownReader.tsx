@@ -95,6 +95,7 @@ export const MarkdownReader: React.FC<MarkdownReaderProps> = ({
 
   const contentRef = useRef<HTMLDivElement>(null);
   const imageCacheRef = useRef<Map<string, string>>(new Map());
+  const selectionTimerRef = useRef<number | null>(null);
 
   // Load document on mount
   useEffect(() => {
@@ -105,6 +106,44 @@ export const MarkdownReader: React.FC<MarkdownReaderProps> = ({
       saveCurrentPosition();
     };
   }, [document.id]);
+
+  // Listen for text selection changes (essential for mobile/Capacitor)
+  useEffect(() => {
+    const handleSelectionChange = () => {
+      console.log('[MarkdownReader] selectionchange event fired');
+
+      // Clear any existing timer
+      if (selectionTimerRef.current) {
+        clearTimeout(selectionTimerRef.current);
+      }
+
+      // Debounce selection changes to avoid triggering too often during selection
+      selectionTimerRef.current = window.setTimeout(() => {
+        const selection = window.getSelection();
+        console.log('[MarkdownReader] Selection check:', selection?.toString().length);
+
+        if (selection && selection.toString().trim().length > 0) {
+          const selected = selection.toString().trim();
+          console.log('[MarkdownReader] Selected text:', selected, 'Length:', selected.length);
+
+          if (selected.length > 2) {
+            console.log('[MarkdownReader] Triggering translation...');
+            setSelectedText(selected);
+            translate(selected);
+          }
+        }
+      }, 500);
+    };
+
+    window.document.addEventListener('selectionchange', handleSelectionChange);
+
+    return () => {
+      window.document.removeEventListener('selectionchange', handleSelectionChange);
+      if (selectionTimerRef.current) {
+        clearTimeout(selectionTimerRef.current);
+      }
+    };
+  }, [translate]);
 
   // Load decks on mount
   useEffect(() => {
@@ -204,16 +243,53 @@ export const MarkdownReader: React.FC<MarkdownReaderProps> = ({
   };
 
   const handleTextSelection = useCallback(() => {
-    const selection = window.getSelection();
-    if (selection && selection.toString().trim().length > 0) {
-      const selected = selection.toString().trim();
-      // Only translate if user selected more than a few characters
-      if (selected.length > 2) {
-        setSelectedText(selected);
-        translate(selected);
+    // Small delay to ensure selection is complete
+    setTimeout(() => {
+      const selection = window.getSelection();
+      console.log('[MarkdownReader] Text selection event triggered');
+
+      if (selection && selection.toString().trim().length > 0) {
+        const selected = selection.toString().trim();
+        console.log('[MarkdownReader] Selected text:', selected, 'Length:', selected.length);
+
+        // Only translate if user selected more than a few characters
+        if (selected.length > 2) {
+          console.log('[MarkdownReader] Triggering translation...');
+          setSelectedText(selected);
+          translate(selected);
+        } else {
+          console.log('[MarkdownReader] Text too short, skipping translation');
+        }
+      } else {
+        console.log('[MarkdownReader] No text selected');
       }
-    }
+    }, 100);
   }, [translate]);
+
+  const handleQuickSaveCard = async () => {
+    if (!selectedText.trim() || !translationState.translation?.trim() || !selectedDeckId) {
+      return;
+    }
+
+    setIsSavingCard(true);
+    try {
+      await cardDb.createCard(
+        selectedDeckId,
+        selectedText.trim(),
+        translationState.translation.trim(),
+        reviewBothDirections,
+        document.id
+      );
+
+      // Close translation dialog
+      clearTranslation();
+    } catch (error) {
+      console.error('Failed to save card:', error);
+      alert('Failed to save card. Please try again.');
+    } finally {
+      setIsSavingCard(false);
+    }
+  };
 
   const handleSaveAsCard = () => {
     // Pre-fill the form with selected text and translation
@@ -410,14 +486,16 @@ export const MarkdownReader: React.FC<MarkdownReaderProps> = ({
         </DialogContent>
       </Dialog>
 
-      {/* Translation Modal */}
-      <TranslationDialog
-        isOpen={translationState.translation !== null || translationState.isTranslating}
+      {/* Translation Bottom Sheet */}
+      <TranslationBottomSheet
+        isOpen={translationState.translation !== null || translationState.isTranslating || translationState.error !== null}
         isTranslating={translationState.isTranslating}
         translation={translationState.translation}
         error={translationState.error}
         onClose={clearTranslation}
+        onQuickSave={handleQuickSaveCard}
         onSaveAsCard={handleSaveAsCard}
+        isSaving={isSavingCard}
       />
 
       {/* Save Card Dialog */}
@@ -530,66 +608,98 @@ const MarkdownContent = memo(({
 ));
 MarkdownContent.displayName = 'MarkdownContent';
 
-// Memoized translation dialog to prevent re-renders
-const TranslationDialog = memo(({
+// Memoized translation bottom sheet to prevent re-renders
+const TranslationBottomSheet = memo(({
   isOpen,
   isTranslating,
   translation,
   error,
   onClose,
+  onQuickSave,
   onSaveAsCard,
+  isSaving,
 }: {
   isOpen: boolean;
   isTranslating: boolean;
   translation: string | null;
   error: string | null;
   onClose: () => void;
+  onQuickSave: () => void;
   onSaveAsCard: () => void;
+  isSaving: boolean;
 }) => (
   <Dialog
     open={isOpen}
     onClose={onClose}
-    maxWidth="sm"
     fullWidth
     keepMounted
     TransitionProps={{
       unmountOnExit: false,
-      timeout: 150,
+      timeout: 200,
     }}
-    slotProps={{
-      backdrop: {
-        timeout: 150,
+    PaperProps={{
+      sx: {
+        position: 'fixed',
+        bottom: 0,
+        left: 0,
+        right: 0,
+        m: 0,
+        width: '100%',
+        maxWidth: '100%',
+        maxHeight: '40vh',
+        borderRadius: '16px 16px 0 0',
+      },
+    }}
+    sx={{
+      '& .MuiBackdrop-root': {
+        backgroundColor: 'rgba(0, 0, 0, 0.3)',
       },
     }}
   >
-    <DialogTitle>
-      Translation
-      {isTranslating && (
-        <CircularProgress size={20} sx={{ ml: 2 }} />
-      )}
-    </DialogTitle>
-    <DialogContent>
+    <Box sx={{
+      px: 2,
+      py: 2,
+      pb: 'calc(16px + env(safe-area-inset-bottom))',
+      overflow: 'auto',
+      maxHeight: '40vh',
+      display: 'flex',
+      alignItems: 'flex-start',
+      gap: 2
+    }}>
       {isTranslating ? (
-        <Box sx={{ py: 3, textAlign: 'center' }}>
-          <CircularProgress />
-          <Typography sx={{ mt: 2 }}>Translating...</Typography>
+        <Box sx={{ py: 2, textAlign: 'center', flex: 1 }}>
+          <CircularProgress size={24} />
+          <Typography variant="body2" sx={{ mt: 1 }}>Translating...</Typography>
         </Box>
       ) : error ? (
-        <Typography color="error">{error}</Typography>
+        <Typography variant="body1" color="error" sx={{ flex: 1 }}>{error}</Typography>
       ) : (
-        <Typography sx={{ py: 2, whiteSpace: 'pre-wrap' }}>
+        <Typography variant="body1" sx={{ whiteSpace: 'pre-wrap', lineHeight: 1.6, flex: 1 }}>
           {translation}
         </Typography>
       )}
-    </DialogContent>
-    <DialogActions>
-      <Button onClick={onClose}>Close</Button>
-      {translation && !error && (
-        <Button onClick={onSaveAsCard} variant="contained">
-          Save as Card
-        </Button>
+
+      {!isTranslating && translation && !error && (
+        <Box sx={{ display: 'flex', gap: 1, flexShrink: 0 }}>
+          <Button
+            size="medium"
+            onClick={onSaveAsCard}
+            variant="outlined"
+            disabled={isSaving}
+          >
+            Save...
+          </Button>
+          <Button
+            size="medium"
+            onClick={onQuickSave}
+            variant="contained"
+            disabled={isSaving}
+          >
+            {isSaving ? <CircularProgress size={20} /> : 'Save'}
+          </Button>
+        </Box>
       )}
-    </DialogActions>
+    </Box>
   </Dialog>
 ));
-TranslationDialog.displayName = 'TranslationDialog';
+TranslationBottomSheet.displayName = 'TranslationBottomSheet';

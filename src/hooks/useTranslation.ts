@@ -56,11 +56,25 @@ export const useTranslation = () => {
    * @returns True if configuration is valid, false otherwise
    */
   const validateConfiguration = (): boolean => {
+    console.log('[useTranslation] Validating configuration...', {
+      translationEnabled: settings.translationEnabled,
+      hasApiUrl: !!settings.llmApiUrl,
+      hasApiKey: !!settings.llmApiKey,
+      hasModel: !!settings.llmModel,
+    });
+
     if (!settings.translationEnabled) {
+      console.log('[useTranslation] Translation is disabled in settings');
+      setState({
+        isTranslating: false,
+        translation: null,
+        error: 'Translation is disabled. Please enable it in Settings.',
+      });
       return false;
     }
 
     if (!settings.llmApiUrl) {
+      console.log('[useTranslation] API URL is not configured');
       setState({
         isTranslating: false,
         translation: null,
@@ -70,6 +84,7 @@ export const useTranslation = () => {
     }
 
     if (!settings.llmApiKey) {
+      console.log('[useTranslation] API Key is not configured');
       setState({
         isTranslating: false,
         translation: null,
@@ -79,6 +94,7 @@ export const useTranslation = () => {
     }
 
     if (!settings.llmModel) {
+      console.log('[useTranslation] Model is not configured');
       setState({
         isTranslating: false,
         translation: null,
@@ -87,6 +103,7 @@ export const useTranslation = () => {
       return false;
     }
 
+    console.log('[useTranslation] Configuration is valid');
     return true;
   };
 
@@ -97,12 +114,16 @@ export const useTranslation = () => {
    * @returns Translated text, or null if translation failed/was cancelled
    */
   const translate = useCallback(async (text: string): Promise<string | null> => {
+    console.log('[useTranslation] Translate called with text:', text.substring(0, 50));
+
     // Validate configuration
     if (!validateConfiguration()) {
+      console.log('[useTranslation] Validation failed, showing error dialog');
       return null;
     }
 
     // Start loading
+    console.log('[useTranslation] Starting translation...');
     setState({
       isTranslating: true,
       translation: null,
