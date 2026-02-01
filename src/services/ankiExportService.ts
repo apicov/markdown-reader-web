@@ -102,3 +102,68 @@ export async function downloadDeckAsAnki(deckId: string): Promise<void> {
 function sanitizeFilename(filename: string): string {
   return filename.replace(/[^a-z0-9_\-]/gi, '_');
 }
+
+/**
+ * Import a deck from Anki TSV format
+ * @param deckName - Name for the new deck (or existing deck to add to)
+ * @param tsvContent - TSV content to import
+ * @param createNewDeck - Whether to create a new deck or prompt for selection
+ * @returns The deck ID that cards were imported into
+ */
+export async function importDeckFromAnki(
+  deckName: string,
+  tsvContent: string
+): Promise<string> {
+  // Get or create the deck
+  const deck = await cardDb.getOrCreateDeck(deckName);
+
+  // Parse TSV content
+  const lines = tsvContent.split('\n').filter(line => line.trim());
+  let importedCount = 0;
+
+  for (const line of lines) {
+    // Split by tab
+    const parts = line.split('\t');
+    if (parts.length < 2) continue; // Skip invalid lines
+
+    const front = unescapeFromTSV(parts[0].trim());
+    const back = unescapeFromTSV(parts[1].trim());
+
+    if (!front || !back) continue; // Skip empty cards
+
+    // Create the card (reviewBothDirections defaults to false for imports)
+    await cardDb.createCard(deck._id, front, back, false);
+    importedCount++;
+  }
+
+  return deck._id;
+}
+
+/**
+ * Unescape special characters from TSV format
+ */
+function unescapeFromTSV(text: string): string {
+  // Convert HTML <br> tags back to newlines
+  let unescaped = text.replace(/<br\s*\/?>/gi, '\n');
+
+  return unescaped;
+}
+
+/**
+ * Import deck from file on native platform
+ * Uses file picker to select a TSV file and imports it
+ */
+export async function importDeckFromFile(): Promise<string | null> {
+  if (!Capacitor.isNativePlatform()) {
+    throw new Error('File picker is only available on native platforms');
+  }
+
+  try {
+    // For web fallback or future implementation, we'll use input element
+    // On native, we'd use a file picker plugin
+    throw new Error('File picker not yet implemented for native platform');
+  } catch (error) {
+    console.error('Failed to pick file:', error);
+    throw error;
+  }
+}

@@ -31,10 +31,11 @@ import {
   PlayArrow as PlayIcon,
   Delete as DeleteIcon,
   Download as DownloadIcon,
+  Upload as UploadIcon,
 } from '@mui/icons-material';
 import type { Deck } from '../types';
 import { cardDb } from '../services/cardDatabaseService';
-import { downloadDeckAsAnki } from '../services/ankiExportService';
+import { downloadDeckAsAnki, importDeckFromAnki } from '../services/ankiExportService';
 import { LoadingSpinner } from './LoadingSpinner';
 import { EmptyState } from './EmptyState';
 
@@ -56,6 +57,10 @@ export const DecksScreen: React.FC<DecksScreenProps> = ({
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deckToDelete, setDeckToDelete] = useState<Deck | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [importDialogOpen, setImportDialogOpen] = useState(false);
+  const [importDeckName, setImportDeckName] = useState('');
+  const [importContent, setImportContent] = useState('');
+  const [isImporting, setIsImporting] = useState(false);
 
   useEffect(() => {
     loadDecks();
@@ -138,6 +143,47 @@ export const DecksScreen: React.FC<DecksScreenProps> = ({
     }
   };
 
+  const handleImportClick = () => {
+    setImportDialogOpen(true);
+    setImportDeckName('');
+    setImportContent('');
+  };
+
+  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const content = e.target?.result as string;
+      setImportContent(content);
+
+      // Suggest deck name from filename
+      const name = file.name.replace(/\.txt$/i, '').replace(/_/g, ' ');
+      setImportDeckName(name);
+    };
+    reader.readAsText(file);
+  };
+
+  const handleImportDeck = async () => {
+    if (!importDeckName.trim() || !importContent.trim()) return;
+
+    setIsImporting(true);
+    try {
+      await importDeckFromAnki(importDeckName.trim(), importContent);
+      await loadDecks();
+      setImportDialogOpen(false);
+      setImportDeckName('');
+      setImportContent('');
+      alert('Deck imported successfully!');
+    } catch (error) {
+      console.error('Failed to import deck:', error);
+      alert('Failed to import deck. Please check the file format and try again.');
+    } finally {
+      setIsImporting(false);
+    }
+  };
+
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
       {/* App Bar */}
@@ -150,6 +196,10 @@ export const DecksScreen: React.FC<DecksScreenProps> = ({
           <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
             Flashcard Decks
           </Typography>
+
+          <IconButton color="inherit" onClick={handleImportClick} title="Import deck">
+            <UploadIcon />
+          </IconButton>
         </Toolbar>
       </AppBar>
 
@@ -294,6 +344,60 @@ export const DecksScreen: React.FC<DecksScreenProps> = ({
             disabled={isDeleting}
           >
             {isDeleting ? <CircularProgress size={24} /> : 'Delete'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Import Deck Dialog */}
+      <Dialog
+        open={importDialogOpen}
+        onClose={() => setImportDialogOpen(false)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>Import Deck from Anki</DialogTitle>
+        <DialogContent>
+          <TextField
+            margin="dense"
+            label="Deck Name"
+            fullWidth
+            value={importDeckName}
+            onChange={(e) => setImportDeckName(e.target.value)}
+            disabled={isImporting}
+            sx={{ mb: 2 }}
+          />
+
+          <Button
+            variant="outlined"
+            component="label"
+            fullWidth
+            disabled={isImporting}
+          >
+            Choose TSV/TXT File
+            <input
+              type="file"
+              hidden
+              accept=".txt,.tsv"
+              onChange={handleFileSelect}
+            />
+          </Button>
+
+          {importContent && (
+            <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
+              File loaded: {importContent.split('\n').filter(l => l.trim()).length} cards detected
+            </Typography>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setImportDialogOpen(false)} disabled={isImporting}>
+            Cancel
+          </Button>
+          <Button
+            onClick={handleImportDeck}
+            variant="contained"
+            disabled={isImporting || !importDeckName.trim() || !importContent.trim()}
+          >
+            {isImporting ? <CircularProgress size={24} /> : 'Import'}
           </Button>
         </DialogActions>
       </Dialog>
