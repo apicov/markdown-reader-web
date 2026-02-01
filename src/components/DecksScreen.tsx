@@ -30,9 +30,11 @@ import {
   Add as AddIcon,
   PlayArrow as PlayIcon,
   Delete as DeleteIcon,
+  Download as DownloadIcon,
 } from '@mui/icons-material';
 import type { Deck } from '../types';
 import { cardDb } from '../services/cardDatabaseService';
+import { downloadDeckAsAnki } from '../services/ankiExportService';
 import { LoadingSpinner } from './LoadingSpinner';
 import { EmptyState } from './EmptyState';
 
@@ -126,6 +128,16 @@ export const DecksScreen: React.FC<DecksScreenProps> = ({
     setDeckToDelete(null);
   };
 
+  const handleExportDeck = async (deck: Deck, event: React.MouseEvent) => {
+    event.stopPropagation(); // Prevent triggering the deck click
+    try {
+      await downloadDeckAsAnki(deck._id);
+    } catch (error) {
+      console.error('Failed to export deck:', error);
+      alert('Failed to export deck. Please try again.');
+    }
+  };
+
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
       {/* App Bar */}
@@ -173,6 +185,14 @@ export const DecksScreen: React.FC<DecksScreenProps> = ({
                           <PlayIcon />
                         </IconButton>
                       )}
+                      <IconButton
+                        edge="end"
+                        color="primary"
+                        onClick={(e) => handleExportDeck(deck, e)}
+                        title="Export to Anki"
+                      >
+                        <DownloadIcon />
+                      </IconButton>
                       <IconButton
                         edge="end"
                         color="error"
