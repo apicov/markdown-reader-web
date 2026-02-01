@@ -204,20 +204,15 @@ export const MarkdownReader: React.FC<MarkdownReaderProps> = ({
       const allDecks = await cardDb.getAllDecks();
       setDecks(allDecks);
 
-      // Auto-select or create deck based on document name
-      if (allDecks.length === 0) {
-        const newDeck = await cardDb.createDeck(document.title);
-        setDecks([newDeck]);
-        setSelectedDeckId(newDeck._id);
+      // Try to find a deck matching the document name
+      const matchingDeck = allDecks.find((d) => d.name === document.title);
+      if (matchingDeck) {
+        setSelectedDeckId(matchingDeck._id);
       } else {
-        // Try to find a deck matching the document name
-        const matchingDeck = allDecks.find((d) => d.name === document.title);
-        if (matchingDeck) {
-          setSelectedDeckId(matchingDeck._id);
-        } else {
-          // Use the first deck as default
-          setSelectedDeckId(allDecks[0]._id);
-        }
+        // Create a new deck for this document
+        const newDeck = await cardDb.createDeck(document.title);
+        setDecks([...allDecks, newDeck]);
+        setSelectedDeckId(newDeck._id);
       }
     } catch (error) {
       console.error('Failed to load decks:', error);

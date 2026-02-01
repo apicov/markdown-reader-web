@@ -24,12 +24,9 @@ interface FSRSCard {
 }
 
 // Type for accessing FSRS scheduling results
-// ts-fsrs returns IPreview which uses string keys ('again', 'hard', 'good', 'easy')
+// ts-fsrs returns IPreview which uses numeric keys (1, 2, 3, 4) corresponding to Rating enum
 interface FSRSSchedulingResult {
-  again: { card: FSRSCard };
-  hard: { card: FSRSCard };
-  good: { card: FSRSCard };
-  easy: { card: FSRSCard };
+  [key: number]: { card: FSRSCard; log: any };
 }
 
 class FSRSService {
@@ -84,23 +81,6 @@ class FSRSService {
     return rating as FSRSRating;
   }
 
-  /**
-   * Get the key name for accessing scheduling results
-   */
-  private getRatingKey(rating: FSRSRating): 'again' | 'hard' | 'good' | 'easy' {
-    switch (rating) {
-      case FSRSRating.Again:
-        return 'again';
-      case FSRSRating.Hard:
-        return 'hard';
-      case FSRSRating.Good:
-        return 'good';
-      case FSRSRating.Easy:
-        return 'easy';
-      default:
-        return 'good';
-    }
-  }
 
   /**
    * Process a card review and return updated scheduling data
@@ -124,9 +104,8 @@ class FSRSService {
     const fsrsRating = this.toFSRSRating(rating);
     const schedulingInfo = this.fsrs.repeat(fsrsCard, now) as unknown as FSRSSchedulingResult;
 
-    // Get the updated card for this rating
-    const ratingKey = this.getRatingKey(fsrsRating);
-    const updatedFSRSCard = schedulingInfo[ratingKey].card;
+    // Get the updated card for this rating (using numeric Rating enum value as key)
+    const updatedFSRSCard = schedulingInfo[fsrsRating].card;
 
     // Update the card's FSRS data for this direction
     const updatedCard = { ...latestCard };
@@ -153,11 +132,12 @@ class FSRSService {
 
     const schedulingInfo = this.fsrs.repeat(fsrsCard, now) as unknown as FSRSSchedulingResult;
 
+    // Access using numeric Rating enum values (1=Again, 2=Hard, 3=Good, 4=Easy)
     return {
-      again: schedulingInfo.again.card.scheduled_days,
-      hard: schedulingInfo.hard.card.scheduled_days,
-      good: schedulingInfo.good.card.scheduled_days,
-      easy: schedulingInfo.easy.card.scheduled_days,
+      again: schedulingInfo[FSRSRating.Again].card.scheduled_days,
+      hard: schedulingInfo[FSRSRating.Hard].card.scheduled_days,
+      good: schedulingInfo[FSRSRating.Good].card.scheduled_days,
+      easy: schedulingInfo[FSRSRating.Easy].card.scheduled_days,
     };
   }
 

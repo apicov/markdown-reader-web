@@ -226,7 +226,7 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({
           >
             <Box sx={{ display: 'flex', gap: 1, justifyContent: 'space-between' }}>
               <Button
-                variant="outlined"
+                variant="contained"
                 color="error"
                 fullWidth
                 onClick={() => handleRating(Rating.Again)}
@@ -240,7 +240,7 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({
                 )}
               </Button>
               <Button
-                variant="outlined"
+                variant="contained"
                 color="warning"
                 fullWidth
                 onClick={() => handleRating(Rating.Hard)}
