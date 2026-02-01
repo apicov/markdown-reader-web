@@ -32,6 +32,8 @@ export interface TranslationState {
   isTranslating: boolean;
   /** Translated text result (null if not translated yet or error occurred) */
   translation: string | null;
+  /** Normalized form of the word (infinitive for verbs, with article for nouns, etc.) */
+  normalizedForm: string | null;
   /** Error message if translation failed (null if successful or in progress) */
   error: string | null;
 }
@@ -85,6 +87,7 @@ export const useTranslation = () => {
   const [state, setState] = useState<TranslationState>({
     isTranslating: false,
     translation: null,
+    normalizedForm: null,
     error: null,
   });
 
@@ -106,6 +109,7 @@ export const useTranslation = () => {
       setState({
         isTranslating: false,
         translation: null,
+        normalizedForm: null,
         error: 'Translation is disabled. Please enable it in Settings.',
       });
       return false;
@@ -116,6 +120,7 @@ export const useTranslation = () => {
       setState({
         isTranslating: false,
         translation: null,
+        normalizedForm: null,
         error: 'API URL is not configured. Please set it in Settings.',
       });
       return false;
@@ -126,6 +131,7 @@ export const useTranslation = () => {
       setState({
         isTranslating: false,
         translation: null,
+        normalizedForm: null,
         error: 'API Key is not configured. Please set it in Settings.',
       });
       return false;
@@ -136,6 +142,7 @@ export const useTranslation = () => {
       setState({
         isTranslating: false,
         translation: null,
+        normalizedForm: null,
         error: 'Model is not configured. Please set it in Settings.',
       });
       return false;
@@ -158,10 +165,12 @@ export const useTranslation = () => {
    * 6. Update state
    *
    * @param text - Text to translate
+   * @param sentenceContext - Optional full sentence containing the text for context
    * @returns Translated text, or null if translation failed/was cancelled
    */
-  const translate = useCallback(async (text: string): Promise<string | null> => {
+  const translate = useCallback(async (text: string, sentenceContext?: string | null): Promise<string | null> => {
     console.log('[useTranslation] Translate called with text:', text.substring(0, 50));
+    console.log('[useTranslation] Sentence context:', sentenceContext);
 
     /**
      * Step 1: Validate configuration before making request
@@ -180,6 +189,7 @@ export const useTranslation = () => {
     setState({
       isTranslating: true,
       translation: null,
+      normalizedForm: null,
       error: null,
     });
 
@@ -191,7 +201,48 @@ export const useTranslation = () => {
        * Using ${targetLanguage} to inject user's language preference
        */
       const targetLanguage = settings.targetLanguage || 'Spanish';
-      const prompt = `Translate the following text to ${targetLanguage}. If the text is already in ${targetLanguage}, rewrite it in a simpler and more understandable way:\n\n${text}`;
+
+      // Build prompt with context if available
+      let prompt: string;
+      if (sentenceContext && sentenceContext !== text) {
+        prompt = `Translate the word/phrase "${text}" to ${targetLanguage}.
+
+Context sentence: "${sentenceContext}"
+
+Use the context sentence to understand the meaning and provide an accurate translation. For German separable verbs or context-dependent words, consider the full sentence structure. If the text is already in ${targetLanguage}, rewrite it in a simpler and more understandable way.
+
+IMPORTANT: Provide your response in the following JSON format:
+{
+  "translation": "the translation in ${targetLanguage}",
+  "normalized": "the base form of the word/phrase in its original language"
+}
+
+For the "normalized" field:
+- If it's a VERB: provide the INFINITIVE form (e.g., "fängt an" → "anfangen", "goes" → "go")
+- If it's a NOUN: include the ARTICLE (e.g., "Tisch" → "der Tisch", "table" → "the table")
+- If it's an ADJECTIVE: provide the base/neutral form without declensions (e.g., "schönen" → "schön", "beautiful")
+- For other word types: provide the dictionary/lemma form
+
+Respond ONLY with valid JSON, nothing else.`;
+      } else {
+        prompt = `Translate the following text to ${targetLanguage}. If the text is already in ${targetLanguage}, rewrite it in a simpler and more understandable way.
+
+Text: "${text}"
+
+IMPORTANT: Provide your response in the following JSON format:
+{
+  "translation": "the translation in ${targetLanguage}",
+  "normalized": "the base form of the word/phrase in its original language"
+}
+
+For the "normalized" field:
+- If it's a VERB: provide the INFINITIVE form (e.g., "fängt an" → "anfangen", "goes" → "go")
+- If it's a NOUN: include the ARTICLE (e.g., "Tisch" → "der Tisch", "table" → "the table")
+- If it's an ADJECTIVE: provide the base/neutral form without declensions (e.g., "schönen" → "schön", "beautiful")
+- For other word types: provide the dictionary/lemma form
+
+Respond ONLY with valid JSON, nothing else.`;
+      }
 
       /**
        * Step 4: Make HTTP request
@@ -247,6 +298,7 @@ export const useTranslation = () => {
         setState({
           isTranslating: false,
           translation: null,
+          normalizedForm: null,
           error: errorMessage,
         });
 
@@ -261,21 +313,41 @@ export const useTranslation = () => {
        * - Safely access nested properties
        * - Returns undefined if any level is null/undefined
        * - Prevents "Cannot read property 'X' of undefined" errors
-       *
-       * LEARNING NOTE - Nullish coalescing (||):
-       * value || 'default' → use 'default' if value is falsy
        */
       const data = await response.json();
-      const result = data.choices?.[0]?.message?.content || 'No translation available';
+      const content = data.choices?.[0]?.message?.content || '';
+
+      // Parse JSON response
+      let translationResult: string;
+      let normalizedResult: string;
+
+      try {
+        // Try to extract JSON from the response (LLM might add markdown formatting)
+        const jsonMatch = content.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+          const parsed = JSON.parse(jsonMatch[0]);
+          translationResult = parsed.translation || 'No translation available';
+          normalizedResult = parsed.normalized || text;
+        } else {
+          // Fallback if JSON parsing fails
+          translationResult = content || 'No translation available';
+          normalizedResult = text;
+        }
+      } catch (parseError) {
+        console.warn('[useTranslation] Failed to parse JSON response, using content as-is:', parseError);
+        translationResult = content || 'No translation available';
+        normalizedResult = text;
+      }
 
       // Success: Update state with translation
       setState({
         isTranslating: false,
-        translation: result,
+        translation: translationResult,
+        normalizedForm: normalizedResult,
         error: null,
       });
 
-      return result;
+      return translationResult;
     } catch (error) {
       /**
        * Step 7: Handle network/parsing errors
@@ -298,6 +370,7 @@ export const useTranslation = () => {
       setState({
         isTranslating: false,
         translation: null,
+        normalizedForm: null,
         error: errorMessage,
       });
 
@@ -312,6 +385,7 @@ export const useTranslation = () => {
     setState({
       isTranslating: false,
       translation: null,
+      normalizedForm: null,
       error: null,
     });
   }, []);

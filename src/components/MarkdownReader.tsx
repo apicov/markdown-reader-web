@@ -107,6 +107,63 @@ export const MarkdownReader: React.FC<MarkdownReaderProps> = ({
     };
   }, [document.id]);
 
+  // Extract sentence containing the selected text
+  const extractSentenceContext = useCallback((selectedText: string): string | null => {
+    const selection = window.getSelection();
+    if (!selection || !selection.rangeCount) return null;
+
+    // Get the text node containing the selection
+    const range = selection.getRangeAt(0);
+    const container = range.commonAncestorContainer;
+
+    // Walk up the DOM tree to find a paragraph or larger block element
+    // This ensures we capture the full sentence, even if parts are in different spans/elements
+    let parentElement = container.nodeType === Node.TEXT_NODE
+      ? container.parentElement
+      : container as HTMLElement;
+
+    // Keep walking up until we find a block-level element that likely contains a full sentence
+    while (parentElement && parentElement !== contentRef.current) {
+      const tagName = parentElement.tagName;
+      // Stop at block-level elements that typically contain complete sentences
+      if (['P', 'DIV', 'LI', 'BLOCKQUOTE', 'TD', 'TH', 'ARTICLE', 'SECTION', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6'].includes(tagName)) {
+        break;
+      }
+      parentElement = parentElement.parentElement;
+    }
+
+    if (!parentElement) return null;
+
+    const fullText = parentElement.textContent || '';
+
+    // Find sentence boundaries (., !, ?, or newlines)
+    const selectedIndex = fullText.indexOf(selectedText);
+    if (selectedIndex === -1) return null;
+
+    // Find start of sentence (look backwards for sentence ending or start of text)
+    let sentenceStart = 0;
+    for (let i = selectedIndex - 1; i >= 0; i--) {
+      if (/[.!?\n]/.test(fullText[i])) {
+        sentenceStart = i + 1;
+        break;
+      }
+    }
+
+    // Find end of sentence (look forwards for sentence ending or end of text)
+    let sentenceEnd = fullText.length;
+    for (let i = selectedIndex + selectedText.length; i < fullText.length; i++) {
+      if (/[.!?\n]/.test(fullText[i])) {
+        sentenceEnd = i + 1;
+        break;
+      }
+    }
+
+    const sentence = fullText.substring(sentenceStart, sentenceEnd).trim();
+    console.log('[MarkdownReader] Full text from parent:', fullText.substring(0, 100));
+    console.log('[MarkdownReader] Extracted sentence:', sentence);
+    return sentence.length > selectedText.length ? sentence : null;
+  }, []);
+
   // Listen for text selection changes (essential for mobile/Capacitor)
   useEffect(() => {
     const handleSelectionChange = () => {
@@ -129,7 +186,9 @@ export const MarkdownReader: React.FC<MarkdownReaderProps> = ({
           if (selected.length > 2) {
             console.log('[MarkdownReader] Triggering translation...');
             setSelectedText(selected);
-            translate(selected);
+            const sentenceContext = extractSentenceContext(selected);
+            console.log('[MarkdownReader] Sentence context:', sentenceContext);
+            translate(selected, sentenceContext);
           }
         }
       }, 500);
@@ -143,7 +202,7 @@ export const MarkdownReader: React.FC<MarkdownReaderProps> = ({
         clearTimeout(selectionTimerRef.current);
       }
     };
-  }, [translate]);
+  }, [translate, extractSentenceContext]);
 
   // Load decks on mount
   useEffect(() => {
@@ -251,7 +310,9 @@ export const MarkdownReader: React.FC<MarkdownReaderProps> = ({
         if (selected.length > 2) {
           console.log('[MarkdownReader] Triggering translation...');
           setSelectedText(selected);
-          translate(selected);
+          const sentenceContext = extractSentenceContext(selected);
+          console.log('[MarkdownReader] Sentence context:', sentenceContext);
+          translate(selected, sentenceContext);
         } else {
           console.log('[MarkdownReader] Text too short, skipping translation');
         }
@@ -259,7 +320,7 @@ export const MarkdownReader: React.FC<MarkdownReaderProps> = ({
         console.log('[MarkdownReader] No text selected');
       }
     }, 100);
-  }, [translate]);
+  }, [translate, extractSentenceContext]);
 
   const handleQuickSaveCard = async () => {
     if (!selectedText.trim() || !translationState.translation?.trim() || !selectedDeckId) {
@@ -268,9 +329,12 @@ export const MarkdownReader: React.FC<MarkdownReaderProps> = ({
 
     setIsSavingCard(true);
     try {
+      // Use normalized form (infinitive/with article) as the front of the card
+      const cardFrontText = translationState.normalizedForm || selectedText.trim();
+
       await cardDb.createCard(
         selectedDeckId,
-        selectedText.trim(),
+        cardFrontText,
         translationState.translation.trim(),
         reviewBothDirections,
         document.id
@@ -287,8 +351,9 @@ export const MarkdownReader: React.FC<MarkdownReaderProps> = ({
   };
 
   const handleSaveAsCard = () => {
-    // Pre-fill the form with selected text and translation
-    setCardFront(selectedText);
+    // Pre-fill the form with normalized form and translation
+    const frontText = translationState.normalizedForm || selectedText;
+    setCardFront(frontText);
     setCardBack(translationState.translation || '');
     setSaveCardDialogOpen(true);
   };
@@ -486,6 +551,7 @@ export const MarkdownReader: React.FC<MarkdownReaderProps> = ({
         isOpen={translationState.translation !== null || translationState.isTranslating || translationState.error !== null}
         isTranslating={translationState.isTranslating}
         translation={translationState.translation}
+        normalizedForm={translationState.normalizedForm}
         error={translationState.error}
         onClose={clearTranslation}
         onQuickSave={handleQuickSaveCard}
@@ -608,6 +674,7 @@ const TranslationBottomSheet = memo(({
   isOpen,
   isTranslating,
   translation,
+  normalizedForm,
   error,
   onClose,
   onQuickSave,
@@ -617,6 +684,7 @@ const TranslationBottomSheet = memo(({
   isOpen: boolean;
   isTranslating: boolean;
   translation: string | null;
+  normalizedForm: string | null;
   error: string | null;
   onClose: () => void;
   onQuickSave: () => void;
@@ -658,7 +726,7 @@ const TranslationBottomSheet = memo(({
       overflow: 'auto',
       maxHeight: '40vh',
       display: 'flex',
-      alignItems: 'flex-start',
+      flexDirection: 'column',
       gap: 2
     }}>
       {isTranslating ? (
@@ -669,30 +737,41 @@ const TranslationBottomSheet = memo(({
       ) : error ? (
         <Typography variant="body1" color="error" sx={{ flex: 1 }}>{error}</Typography>
       ) : (
-        <Typography variant="body1" sx={{ whiteSpace: 'pre-wrap', lineHeight: 1.6, flex: 1 }}>
-          {translation}
-        </Typography>
-      )}
-
-      {!isTranslating && translation && !error && (
-        <Box sx={{ display: 'flex', gap: 1, flexShrink: 0 }}>
-          <Button
-            size="medium"
-            onClick={onSaveAsCard}
-            variant="outlined"
-            disabled={isSaving}
-          >
-            Save...
-          </Button>
-          <Button
-            size="medium"
-            onClick={onQuickSave}
-            variant="contained"
-            disabled={isSaving}
-          >
-            {isSaving ? <CircularProgress size={20} /> : 'Save'}
-          </Button>
-        </Box>
+        <>
+          {normalizedForm && (
+            <Box>
+              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>
+                Base form:
+              </Typography>
+              <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
+                {normalizedForm}
+              </Typography>
+            </Box>
+          )}
+          <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 2 }}>
+            <Typography variant="body1" sx={{ whiteSpace: 'pre-wrap', lineHeight: 1.6, flex: 1 }}>
+              {translation}
+            </Typography>
+            <Box sx={{ display: 'flex', gap: 1, flexShrink: 0 }}>
+              <Button
+                size="medium"
+                onClick={onSaveAsCard}
+                variant="outlined"
+                disabled={isSaving}
+              >
+                Save...
+              </Button>
+              <Button
+                size="medium"
+                onClick={onQuickSave}
+                variant="contained"
+                disabled={isSaving}
+              >
+                {isSaving ? <CircularProgress size={20} /> : 'Save'}
+              </Button>
+            </Box>
+          </Box>
+        </>
       )}
     </Box>
   </Dialog>
