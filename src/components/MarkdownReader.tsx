@@ -208,6 +208,9 @@ export const MarkdownReader: React.FC<MarkdownReaderProps> = ({
             const sentenceContext = selected.length < 50 ? extractSentenceContext(selected) : null;
             console.log('[MarkdownReader] Sentence context:', sentenceContext);
             translate(selected, sentenceContext);
+
+            // Clear selection to prevent multiple translations
+            selection.removeAllRanges();
           }
         }
       }, 500);
@@ -335,6 +338,9 @@ export const MarkdownReader: React.FC<MarkdownReaderProps> = ({
           const sentenceContext = selected.length < 50 ? extractSentenceContext(selected) : null;
           console.log('[MarkdownReader] Sentence context:', sentenceContext);
           translate(selected, sentenceContext);
+
+          // Clear selection to prevent multiple translations
+          selection.removeAllRanges();
         } else {
           console.log('[MarkdownReader] Text too short, skipping translation');
         }
