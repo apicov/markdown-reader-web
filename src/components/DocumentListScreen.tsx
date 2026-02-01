@@ -4,7 +4,7 @@
  * Displays list of available markdown documents and allows user to select one to read.
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
   Box,
   AppBar,
@@ -38,6 +38,7 @@ import {
   requestDirectoryAccess,
   hasWebDirectoryAccess,
 } from '../services/documentService';
+import { MESSAGES } from '../constants/messages';
 
 interface DocumentListScreenProps {
   onDocumentSelect: (doc: Document) => void;
@@ -55,21 +56,13 @@ export const DocumentListScreen: React.FC<DocumentListScreenProps> = ({
   const [documents, setDocuments] = useState<Document[]>([]);
   const [isLoading, setIsLoading] = useState(false);
 
-  // Load documents on mount and when docsPath changes
-  useEffect(() => {
-    if (settings.docsPath) {
-      loadDocuments();
-    }
-  }, [settings.docsPath]);
-
-  const loadDocuments = async () => {
+  const loadDocuments = useCallback(async () => {
     setIsLoading(true);
     try {
       const platform = Capacitor.getPlatform();
 
       // On mobile, restore directory access with the saved URI
       if (platform !== 'web' && settings.docsPath) {
-        console.log('[loadDocuments] Restoring directory access with URI:', settings.docsPath);
         await requestDirectoryAccess(settings.docsPath);
       }
 
@@ -80,7 +73,14 @@ export const DocumentListScreen: React.FC<DocumentListScreenProps> = ({
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [settings.docsPath]);
+
+  // Load documents on mount and when docsPath changes
+  useEffect(() => {
+    if (settings.docsPath) {
+      loadDocuments();
+    }
+  }, [settings.docsPath, loadDocuments]);
 
   const handleDocumentClick = async (doc: Document) => {
     // Find markdown file in folder
@@ -91,7 +91,58 @@ export const DocumentListScreen: React.FC<DocumentListScreenProps> = ({
         markdownFile,
       });
     } else {
-      alert('No markdown file found in this folder');
+      alert(MESSAGES.ERRORS.NO_MARKDOWN_IN_FOLDER);
+    }
+  };
+
+  const handlePickFolderWeb = async () => {
+    // Web: Use File System Access API
+    if (!('showDirectoryPicker' in window)) {
+      alert(MESSAGES.ERRORS.BROWSER_NOT_SUPPORTED);
+      return;
+    }
+
+    const handle = await requestDirectoryAccess();
+
+    if (handle) {
+      // Load documents from the selected folder
+      const docs = await getDocuments('');
+      setDocuments(docs);
+
+      if (docs.length === 0) {
+        alert(MESSAGES.ERRORS.NO_DOCUMENTS_FOUND);
+      }
+    } else {
+      alert(MESSAGES.ERRORS.FOLDER_SELECTION_FAILED);
+    }
+  };
+
+  const handlePickFolderMobile = async () => {
+    // Mobile: Use Capacitor FilePicker plugin
+    const result = await FilePicker.pickDirectory();
+
+    // The FilePicker should return a URI on Android, not a path
+    const dirUri: string | undefined = ('uri' in result && typeof result.uri === 'string')
+      ? result.uri
+      : ('path' in result && typeof result.path === 'string')
+        ? result.path
+        : undefined;
+
+    if (result && dirUri) {
+      // Store the content URI and load documents
+      await requestDirectoryAccess(dirUri);
+
+      // Save the URI to settings for future use
+      await updateSettings({ docsPath: dirUri });
+
+      const docs = await getDocuments(dirUri);
+      setDocuments(docs);
+
+      if (docs.length === 0) {
+        alert(MESSAGES.ERRORS.NO_DOCUMENTS_FOUND);
+      }
+    } else {
+      alert(MESSAGES.ERRORS.FOLDER_SELECTION_FAILED);
     }
   };
 
@@ -101,61 +152,13 @@ export const DocumentListScreen: React.FC<DocumentListScreenProps> = ({
     setIsLoading(true);
     try {
       if (platform === 'web') {
-        // Web: Use File System Access API
-        if (!('showDirectoryPicker' in window)) {
-          alert('File System Access API is not supported in this browser. Please use Chrome or Edge.');
-          setIsLoading(false);
-          return;
-        }
-
-        const handle = await requestDirectoryAccess();
-
-        if (handle) {
-          // Load documents from the selected folder
-          const docs = await getDocuments('');
-          setDocuments(docs);
-
-          if (docs.length === 0) {
-            alert('No document folders found. Make sure your folder contains subdirectories with .md files.');
-          }
-        } else {
-          alert('Folder selection was cancelled or failed.');
-        }
+        await handlePickFolderWeb();
       } else {
-        // Mobile: Use Capacitor FilePicker plugin
-        const result = await FilePicker.pickDirectory();
-
-        console.log('[handlePickFolder] FilePicker result:', JSON.stringify(result, null, 2));
-
-        // The FilePicker should return a URI on Android, not a path
-        const dirUri = (result as any).uri || result.path;
-
-        if (result && dirUri) {
-          console.log('[handlePickFolder] Selected URI/path:', dirUri);
-
-          // Store the content URI and load documents
-          await requestDirectoryAccess(dirUri);
-
-          // Save the URI to settings for future use
-          await updateSettings({ docsPath: dirUri });
-          console.log('[handlePickFolder] Saved URI to settings');
-
-          const docs = await getDocuments(dirUri);
-          setDocuments(docs);
-
-          console.log('[handlePickFolder] Documents found:', docs.length);
-
-          if (docs.length === 0) {
-            alert('No document folders found. Make sure your folder contains subdirectories with .md files.');
-          }
-        } else {
-          console.log('[handlePickFolder] No path/URI in result');
-          alert('Folder selection was cancelled or failed.');
-        }
+        await handlePickFolderMobile();
       }
     } catch (error) {
       console.error('Failed to pick folder:', error);
-      alert(`Failed to access folder: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      alert(MESSAGES.ERRORS.FOLDER_ACCESS_FAILED(error instanceof Error ? error.message : 'Unknown error'));
     } finally {
       setIsLoading(false);
     }
@@ -167,10 +170,15 @@ export const DocumentListScreen: React.FC<DocumentListScreenProps> = ({
   // - Mobile: no docsPath saved in settings
   const needsFolderPicker = isWeb ? !hasWebDirectoryAccess() : !settings.docsPath;
 
-  console.log('[DocumentListScreen] Render - isWeb:', isWeb, 'needsFolderPicker:', needsFolderPicker, 'docsPath:', settings.docsPath, 'documents:', documents.length, 'isLoading:', isLoading);
-
   return (
-    <Box sx={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
+    <Box sx={{
+      display: 'flex',
+      flexDirection: 'column',
+      height: '100vh',
+      overscrollBehavior: 'none',
+      width: '100vw',
+      overflow: 'hidden',
+    }}>
       {/* App Bar */}
       <AppBar position="static">
         <Toolbar>
@@ -197,7 +205,13 @@ export const DocumentListScreen: React.FC<DocumentListScreenProps> = ({
       </AppBar>
 
       {/* Content */}
-      <Container sx={{ flex: 1, py: 3, overflow: 'auto' }}>
+      <Container sx={{
+        flex: 1,
+        py: 3,
+        overflowY: 'auto',
+        overflowX: 'hidden',
+        overscrollBehaviorX: 'none',
+      }}>
         {needsFolderPicker ? (
           <EmptyState
             icon={<FolderIcon sx={{ fontSize: 64, opacity: 0.5 }} />}
@@ -206,16 +220,6 @@ export const DocumentListScreen: React.FC<DocumentListScreenProps> = ({
             action={{
               label: "Pick Folder",
               onClick: handlePickFolder,
-            }}
-          />
-        ) : !settings.docsPath && !isWeb ? (
-          <EmptyState
-            icon={<FolderIcon sx={{ fontSize: 64, opacity: 0.5 }} />}
-            title="No documents folder selected"
-            description="Please go to Settings and enter the path to your documents folder"
-            action={{
-              label: "Open Settings",
-              onClick: onOpenSettings,
             }}
           />
         ) : isLoading ? (
