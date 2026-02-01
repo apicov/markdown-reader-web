@@ -205,41 +205,44 @@ export const useTranslation = () => {
       // Build prompt with context if available
       let prompt: string;
       if (sentenceContext && sentenceContext !== text) {
-        prompt = `Translate the word/phrase "${text}" to ${targetLanguage}.
+        prompt = `Analyze the word/phrase "${text}" in this context sentence: "${sentenceContext}"
 
-Context sentence: "${sentenceContext}"
-
-Use the context sentence to understand the meaning and provide an accurate translation. For German separable verbs or context-dependent words, consider the full sentence structure. If the text is already in ${targetLanguage}, rewrite it in a simpler and more understandable way.
-
-IMPORTANT: Provide your response in the following JSON format:
-{
-  "translation": "the translation in ${targetLanguage}",
-  "normalized": "the base form of the word/phrase in its original language"
-}
-
-For the "normalized" field:
+Step 1: Identify the base form of the word:
 - If it's a VERB: provide the INFINITIVE form (e.g., "fängt an" → "anfangen", "goes" → "go")
 - If it's a NOUN: include the ARTICLE (e.g., "Tisch" → "der Tisch", "table" → "the table")
 - If it's an ADJECTIVE: provide the base/neutral form without declensions (e.g., "schönen" → "schön", "beautiful")
 - For other word types: provide the dictionary/lemma form
+
+Step 2: Translate the BASE FORM (not the conjugated/declined form) to ${targetLanguage}.
+
+IMPORTANT: Provide your response in the following JSON format:
+{
+  "translation": "the translation of the BASE FORM in ${targetLanguage}",
+  "normalized": "the base form of the word/phrase in its original language"
+}
+
+Use the context sentence to understand the meaning, but translate the normalized/base form, not the conjugated form.
 
 Respond ONLY with valid JSON, nothing else.`;
       } else {
-        prompt = `Translate the following text to ${targetLanguage}. If the text is already in ${targetLanguage}, rewrite it in a simpler and more understandable way.
+        prompt = `Analyze and translate the text: "${text}"
 
-Text: "${text}"
-
-IMPORTANT: Provide your response in the following JSON format:
-{
-  "translation": "the translation in ${targetLanguage}",
-  "normalized": "the base form of the word/phrase in its original language"
-}
-
-For the "normalized" field:
+Step 1: Identify the base form of the word/text:
 - If it's a VERB: provide the INFINITIVE form (e.g., "fängt an" → "anfangen", "goes" → "go")
 - If it's a NOUN: include the ARTICLE (e.g., "Tisch" → "der Tisch", "table" → "the table")
 - If it's an ADJECTIVE: provide the base/neutral form without declensions (e.g., "schönen" → "schön", "beautiful")
 - For other word types: provide the dictionary/lemma form
+- If it's already a phrase or full sentence, keep it as is
+
+Step 2: Translate the BASE FORM (not the conjugated/declined form) to ${targetLanguage}.
+
+IMPORTANT: Provide your response in the following JSON format:
+{
+  "translation": "the translation of the BASE FORM in ${targetLanguage}",
+  "normalized": "the base form of the word/phrase in its original language"
+}
+
+If the text is already in ${targetLanguage}, rewrite it in a simpler and more understandable way.
 
 Respond ONLY with valid JSON, nothing else.`;
       }

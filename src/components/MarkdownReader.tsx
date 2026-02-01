@@ -123,18 +123,28 @@ export const MarkdownReader: React.FC<MarkdownReaderProps> = ({
       : container as HTMLElement;
 
     // Keep walking up until we find a block-level element that likely contains a full sentence
-    while (parentElement && parentElement !== contentRef.current) {
+    // But limit to just a few steps to avoid grabbing too much text
+    let steps = 0;
+    const maxSteps = 3;
+    while (parentElement && parentElement !== contentRef.current && steps < maxSteps) {
       const tagName = parentElement.tagName;
       // Stop at block-level elements that typically contain complete sentences
-      if (['P', 'DIV', 'LI', 'BLOCKQUOTE', 'TD', 'TH', 'ARTICLE', 'SECTION', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6'].includes(tagName)) {
+      if (['P', 'LI', 'BLOCKQUOTE', 'TD', 'TH'].includes(tagName)) {
         break;
       }
       parentElement = parentElement.parentElement;
+      steps++;
     }
 
     if (!parentElement) return null;
 
     const fullText = parentElement.textContent || '';
+
+    // Don't extract context if the full text is too long (likely multiple sentences/paragraphs)
+    if (fullText.length > 300) {
+      console.log('[MarkdownReader] Parent text too long, skipping context extraction');
+      return null;
+    }
 
     // Find sentence boundaries (., !, ?, or newlines)
     const selectedIndex = fullText.indexOf(selectedText);
@@ -159,7 +169,13 @@ export const MarkdownReader: React.FC<MarkdownReaderProps> = ({
     }
 
     const sentence = fullText.substring(sentenceStart, sentenceEnd).trim();
-    console.log('[MarkdownReader] Full text from parent:', fullText.substring(0, 100));
+
+    // Don't use context if the extracted sentence is too long (likely grabbed too much)
+    if (sentence.length > 200) {
+      console.log('[MarkdownReader] Extracted sentence too long, skipping context');
+      return null;
+    }
+
     console.log('[MarkdownReader] Extracted sentence:', sentence);
     return sentence.length > selectedText.length ? sentence : null;
   }, []);
@@ -186,7 +202,10 @@ export const MarkdownReader: React.FC<MarkdownReaderProps> = ({
           if (selected.length > 2) {
             console.log('[MarkdownReader] Triggering translation...');
             setSelectedText(selected);
-            const sentenceContext = extractSentenceContext(selected);
+
+            // Only extract sentence context for short selections (single words/phrases)
+            // For longer selections (full sentences), don't expand context
+            const sentenceContext = selected.length < 50 ? extractSentenceContext(selected) : null;
             console.log('[MarkdownReader] Sentence context:', sentenceContext);
             translate(selected, sentenceContext);
           }
@@ -310,7 +329,10 @@ export const MarkdownReader: React.FC<MarkdownReaderProps> = ({
         if (selected.length > 2) {
           console.log('[MarkdownReader] Triggering translation...');
           setSelectedText(selected);
-          const sentenceContext = extractSentenceContext(selected);
+
+          // Only extract sentence context for short selections (single words/phrases)
+          // For longer selections (full sentences), don't expand context
+          const sentenceContext = selected.length < 50 ? extractSentenceContext(selected) : null;
           console.log('[MarkdownReader] Sentence context:', sentenceContext);
           translate(selected, sentenceContext);
         } else {
