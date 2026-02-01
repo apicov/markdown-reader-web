@@ -233,7 +233,6 @@ export const DocumentListScreen: React.FC<DocumentListScreenProps> = ({
                   <FolderIcon sx={{ mr: 2, opacity: 0.7 }} />
                   <ListItemText
                     primary={doc.title}
-                    secondary={doc.folderPath}
                   />
                 </ListItemButton>
               </ListItem>
