@@ -224,36 +224,9 @@ export const DecksScreen: React.FC<DecksScreenProps> = ({
                 <ListItem
                   key={deck._id}
                   disablePadding
-                  secondaryAction={
-                    <Box sx={{ display: 'flex', gap: 1 }}>
-                      {stats.due > 0 && (
-                        <IconButton
-                          edge="end"
-                          color="primary"
-                          onClick={() => onReviewDeck(deck._id)}
-                        >
-                          <PlayIcon />
-                        </IconButton>
-                      )}
-                      <IconButton
-                        edge="end"
-                        color="primary"
-                        onClick={(e) => handleExportDeck(deck, e)}
-                        title="Export to Anki"
-                      >
-                        <DownloadIcon />
-                      </IconButton>
-                      <IconButton
-                        edge="end"
-                        color="error"
-                        onClick={(e) => handleDeleteClick(deck, e)}
-                      >
-                        <DeleteIcon />
-                      </IconButton>
-                    </Box>
-                  }
+                  sx={{ display: 'flex', alignItems: 'center' }}
                 >
-                  <ListItemButton onClick={() => onReviewDeck(deck._id)}>
+                  <ListItemButton onClick={() => onReviewDeck(deck._id)} sx={{ flex: 1, minWidth: 0 }}>
                     <ListItemText
                       primary={deck.name}
                       secondary={
@@ -263,6 +236,29 @@ export const DecksScreen: React.FC<DecksScreenProps> = ({
                       }
                     />
                   </ListItemButton>
+                  <Box sx={{ display: 'flex', gap: 1, flexShrink: 0, pr: 1 }}>
+                    {stats.due > 0 && (
+                      <IconButton
+                        color="primary"
+                        onClick={() => onReviewDeck(deck._id)}
+                      >
+                        <PlayIcon />
+                      </IconButton>
+                    )}
+                    <IconButton
+                      color="primary"
+                      onClick={(e) => handleExportDeck(deck, e)}
+                      title="Export to Anki"
+                    >
+                      <DownloadIcon />
+                    </IconButton>
+                    <IconButton
+                      color="error"
+                      onClick={(e) => handleDeleteClick(deck, e)}
+                    >
+                      <DeleteIcon />
+                    </IconButton>
+                  </Box>
                 </ListItem>
               );
             })}
