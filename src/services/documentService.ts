@@ -139,6 +139,10 @@ export const findMarkdownInFolder = async (
  */
 export const readMarkdownFile = async (filePath: string): Promise<string> => {
   try {
+    // Single-file store takes priority on all platforms
+    const singleContent = singleFileStore.get(filePath);
+    if (singleContent !== undefined) return singleContent;
+
     const platform = Capacitor.getPlatform();
 
     if (platform === 'web') {
@@ -174,6 +178,11 @@ export const readMarkdownFile = async (filePath: string): Promise<string> => {
  */
 let webDirectoryHandle: FileSystemDirectoryHandle | null = null;
 let webFileCache: Map<string, File> = new Map();
+
+/**
+ * For single-file loading: stores pre-read content keyed by a sentinel path
+ */
+const singleFileStore: Map<string, string> = new Map();
 
 /**
  * For mobile platform: Store content URI from directory picker
@@ -374,6 +383,28 @@ export async function readWebMarkdownFile(filePath: string): Promise<string> {
  */
 export const hasWebDirectoryAccess = (): boolean => {
   return webDirectoryHandle !== null;
+};
+
+/**
+ * Load a single markdown file and return a Document for it.
+ * Reads the content immediately so it works on all platforms.
+ *
+ * @param fileName - Display name for the file
+ * @param content  - The markdown text content
+ * @returns A Document representing the single file
+ */
+export const loadSingleFile = (fileName: string, content: string): Document => {
+  const baseName = fileName.replace(/\.md$/i, '');
+  const virtualPath = `__single__/${fileName}`;
+
+  singleFileStore.set(virtualPath, content);
+
+  return {
+    id: `__single__/${baseName}`,
+    title: baseName,
+    folderPath: '__single__',
+    markdownFile: virtualPath,
+  };
 };
 
 /**

@@ -24,6 +24,7 @@ import {
   Refresh as RefreshIcon,
   Folder as FolderIcon,
   Style as CardsIcon,
+  InsertDriveFile as FileIcon,
 } from '@mui/icons-material';
 import { LoadingSpinner } from './LoadingSpinner';
 import { EmptyState } from './EmptyState';
@@ -37,6 +38,7 @@ import {
   findMarkdownInFolder,
   requestDirectoryAccess,
   hasWebDirectoryAccess,
+  loadSingleFile,
 } from '../services/documentService';
 import { MESSAGES } from '../constants/messages';
 
@@ -146,6 +148,40 @@ export const DocumentListScreen: React.FC<DocumentListScreenProps> = ({
     }
   };
 
+  const handlePickFile = async () => {
+    const platform = Capacitor.getPlatform();
+    try {
+      if (platform === 'web') {
+        if (!('showOpenFilePicker' in window)) {
+          alert(MESSAGES.ERRORS.BROWSER_NOT_SUPPORTED);
+          return;
+        }
+        const [fileHandle] = await (window as any).showOpenFilePicker({
+          types: [{ description: 'Markdown files', accept: { 'text/markdown': ['.md'] } }],
+          multiple: false,
+        });
+        const file: File = await fileHandle.getFile();
+        const content = await file.text();
+        const doc = loadSingleFile(file.name, content);
+        onDocumentSelect(doc);
+      } else {
+        const result = await FilePicker.pickFiles({ limit: 1, readData: true });
+        const picked = result.files[0];
+        if (!picked) return;
+
+        // Decode base64 content returned by the mobile FilePicker
+        const content = atob(picked.data ?? '');
+        const doc = loadSingleFile(picked.name, content);
+        onDocumentSelect(doc);
+      }
+    } catch (error: any) {
+      // User cancelled the picker — don't show an error
+      if (error?.name === 'AbortError') return;
+      console.error('Failed to pick file:', error);
+      alert(`Could not open file: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  };
+
   const handlePickFolder = async () => {
     const platform = Capacitor.getPlatform();
 
@@ -188,6 +224,10 @@ export const DocumentListScreen: React.FC<DocumentListScreenProps> = ({
 
           <IconButton color="inherit" onClick={onOpenDecks}>
             <CardsIcon />
+          </IconButton>
+
+          <IconButton color="inherit" onClick={handlePickFile} title="Open markdown file">
+            <FileIcon />
           </IconButton>
 
           <IconButton color="inherit" onClick={loadDocuments} disabled={isLoading}>
