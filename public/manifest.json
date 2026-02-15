@@ -1,0 +1,15 @@
+{
+  "name": "Markdown Reader",
+  "short_name": "MD Reader",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#ffffff",
+  "icons": [
+    {
+      "src": "/markdown_reader_icon.jpeg",
+      "sizes": "1024x1024",
+      "type": "image/jpeg"
+    }
+  ]
+}
