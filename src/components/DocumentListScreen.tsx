@@ -219,7 +219,7 @@ export const DocumentListScreen: React.FC<DocumentListScreenProps> = ({
       <AppBar position="static">
         <Toolbar>
           <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
-            Markdown Reader
+            MarkLearn
           </Typography>
 
           <IconButton color="inherit" onClick={onOpenDecks}>

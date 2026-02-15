@@ -1,6 +1,6 @@
 {
-  "name": "Markdown Reader",
-  "short_name": "MD Reader",
+  "name": "MarkLearn",
+  "short_name": "MarkLearn",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#ffffff",
