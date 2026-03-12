@@ -259,6 +259,20 @@ async function loadWebFileCache(): Promise<void> {
 }
 
 /**
+ * Check if a filename is an image based on its extension
+ */
+function isImageFile(filename: string): boolean {
+  const lower = filename.toLowerCase();
+  return lower.endsWith('.png') ||
+         lower.endsWith('.jpg') ||
+         lower.endsWith('.jpeg') ||
+         lower.endsWith('.gif') ||
+         lower.endsWith('.svg') ||
+         lower.endsWith('.webp') ||
+         lower.endsWith('.bmp');
+}
+
+/**
  * Recursively load markdown and image files from a directory
  */
 async function loadFilesFromDirectory(dirHandle: FileSystemDirectoryHandle, path: string): Promise<void> {
@@ -267,12 +281,13 @@ async function loadFilesFromDirectory(dirHandle: FileSystemDirectoryHandle, path
       if (entry.kind === 'file') {
         const fileHandle = entry as FileSystemFileHandle;
         const file = await fileHandle.getFile();
+
         // Cache markdown files
         if (entry.name.toLowerCase().endsWith('.md')) {
           webFileCache.set(`${path}/${entry.name}`, file);
         }
-        // Cache image files
-        else if (file.type.startsWith('image/')) {
+        // Cache image files (check both MIME type and extension as fallback)
+        else if (file.type.startsWith('image/') || isImageFile(entry.name)) {
           webFileCache.set(`${path}/${entry.name}`, file);
         }
       }
@@ -429,7 +444,8 @@ export const getWebImage = async (folderPath: string, imagePath: string): Promis
 
   for (const path of possiblePaths) {
     const file = webFileCache.get(path);
-    if (file && file.type.startsWith('image/')) {
+
+    if (file && (file.type.startsWith('image/') || isImageFile(file.name))) {
       // Convert File to data URL
       return new Promise((resolve) => {
         const reader = new FileReader();

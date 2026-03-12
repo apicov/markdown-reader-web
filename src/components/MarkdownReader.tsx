@@ -54,6 +54,7 @@ import { useTranslation } from '../hooks/useTranslation';
 import type { Document, Deck } from '../types';
 import { readMarkdownFile, getWebImage } from '../services/documentService';
 import { extractTableOfContents, type TocItem } from '../services/tocService';
+import DocumentProvider from '../plugins/documentProvider';
 import {
   saveReadingPosition,
   getReadingPosition,
@@ -96,6 +97,7 @@ export const MarkdownReader: React.FC<MarkdownReaderProps> = ({
   const contentRef = useRef<HTMLDivElement>(null);
   const imageCacheRef = useRef<Map<string, string>>(new Map());
   const selectionTimerRef = useRef<number | null>(null);
+  const fileUriMapRef = useRef<Map<string, string>>(new Map()); // Maps filename -> content URI
 
   // Load document on mount
   useEffect(() => {
@@ -258,6 +260,21 @@ export const MarkdownReader: React.FC<MarkdownReaderProps> = ({
       }
 
       setTocItems(toc);
+
+      // Pre-load file URI map for Android content URIs (for image loading performance)
+      if (Capacitor.getPlatform() !== 'web' && document.folderPath.startsWith('content://')) {
+        try {
+          console.log('[loadDocument] Pre-loading file URI map...');
+          const dirResult = await DocumentProvider.listDirectory({ uri: document.folderPath });
+          fileUriMapRef.current.clear();
+          dirResult.files.forEach((file: any) => {
+            fileUriMapRef.current.set(file.name, file.uri);
+          });
+          console.log('[loadDocument] File URI map loaded with', fileUriMapRef.current.size, 'entries');
+        } catch (error) {
+          console.error('[loadDocument] Failed to pre-load file URI map:', error);
+        }
+      }
 
       // Restore scroll position
       setTimeout(async () => {
@@ -424,14 +441,16 @@ export const MarkdownReader: React.FC<MarkdownReaderProps> = ({
   // Memoized to prevent recreation on every render (only recreates when document changes)
   const ImageComponent = useMemo(() => {
     const CachedImage: React.FC<React.ImgHTMLAttributes<HTMLImageElement>> = ({ src, alt, ...props }) => {
-      const [imageSrc, setImageSrc] = useState<string | undefined>(src);
+      const [imageSrc, setImageSrc] = useState<string | undefined>(undefined);
 
       useEffect(() => {
         const loadImage = async () => {
           if (!src) return;
 
-          // Check if we're on web platform and have a relative path
-          if (Capacitor.getPlatform() === 'web' && !src.startsWith('http') && !src.startsWith('data:')) {
+          // Check if it's a relative path (not HTTP, data URL, or content URI)
+          const isRelativePath = !src.startsWith('http') && !src.startsWith('data:') && !src.startsWith('content://') && !src.startsWith('capacitor://');
+
+          if (isRelativePath) {
             // Check cache first
             const cached = imageCacheRef.current.get(src);
             if (cached) {
@@ -439,23 +458,44 @@ export const MarkdownReader: React.FC<MarkdownReaderProps> = ({
               return;
             }
 
-            // Load from file cache
-            const dataUrl = await getWebImage(document.folderPath, src);
-            if (dataUrl) {
-              setImageSrc(dataUrl);
-              // Update cache using ref (not state) to avoid triggering re-renders
-              // Implement LRU cache: remove oldest entry if cache is full
-              if (imageCacheRef.current.size >= MAX_IMAGE_CACHE_SIZE) {
-                const firstKey = imageCacheRef.current.keys().next().value;
-                if (firstKey) {
-                  imageCacheRef.current.delete(firstKey);
+            if (Capacitor.getPlatform() === 'web') {
+              // Web: Load from file cache as data URL
+              const dataUrl = await getWebImage(document.folderPath, src);
+              if (dataUrl) {
+                setImageSrc(dataUrl);
+                if (imageCacheRef.current.size >= MAX_IMAGE_CACHE_SIZE) {
+                  const firstKey = imageCacheRef.current.keys().next().value;
+                  if (firstKey) imageCacheRef.current.delete(firstKey);
                 }
+                imageCacheRef.current.set(src, dataUrl);
               }
-              imageCacheRef.current.set(src, dataUrl);
+            } else if (document.folderPath.startsWith('content://')) {
+              // Android with content URI: Use pre-loaded file URI map
+              try {
+                const imageUri = fileUriMapRef.current.get(src);
+
+                if (imageUri) {
+                  // Read the image file as base64
+                  const fileResult = await DocumentProvider.readFile({ uri: imageUri, asBase64: true });
+                  // Convert to data URL
+                  const dataUrl = `data:image/jpeg;base64,${fileResult.content}`;
+                  setImageSrc(dataUrl);
+                  imageCacheRef.current.set(src, dataUrl);
+                } else {
+                  console.warn('[CachedImage] Image URI not found in map:', src);
+                }
+              } catch (error) {
+                console.error('[CachedImage] Error loading image:', error);
+              }
             } else {
-              console.warn('Image not found in cache:', src);
+              // Mobile with regular file path: Construct full path and convert for WebView
+              const fullPath = `${document.folderPath}/${src}`;
+              const convertedSrc = Capacitor.convertFileSrc(fullPath);
+              setImageSrc(convertedSrc);
+              imageCacheRef.current.set(src, convertedSrc);
             }
           } else {
+            // Already a full URL
             setImageSrc(src);
           }
         };

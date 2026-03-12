@@ -2,6 +2,7 @@ package com.markdownreader.app;
 
 import android.content.Intent;
 import android.net.Uri;
+import android.util.Base64;
 import androidx.documentfile.provider.DocumentFile;
 import com.getcapacitor.JSArray;
 import com.getcapacitor.JSObject;
@@ -10,6 +11,7 @@ import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
 import java.io.BufferedReader;
+import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 
@@ -100,6 +102,7 @@ public class DocumentProviderPlugin extends Plugin {
     @PluginMethod
     public void readFile(PluginCall call) {
         String uriString = call.getString("uri");
+        Boolean asBase64 = call.getBoolean("asBase64", false);
 
         if (uriString == null || uriString.isEmpty()) {
             call.reject("URI is required");
@@ -115,19 +118,39 @@ public class DocumentProviderPlugin extends Plugin {
                 return;
             }
 
-            BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream));
-            StringBuilder content = new StringBuilder();
-            String line;
+            JSObject result = new JSObject();
 
-            while ((line = reader.readLine()) != null) {
-                content.append(line).append("\n");
+            if (asBase64) {
+                // Read as binary and encode to base64
+                ByteArrayOutputStream buffer = new ByteArrayOutputStream();
+                byte[] data = new byte[8192];
+                int nRead;
+
+                while ((nRead = inputStream.read(data, 0, data.length)) != -1) {
+                    buffer.write(data, 0, nRead);
+                }
+
+                buffer.flush();
+                byte[] byteArray = buffer.toByteArray();
+                String base64String = Base64.encodeToString(byteArray, Base64.NO_WRAP);
+
+                result.put("content", base64String);
+                buffer.close();
+            } else {
+                // Read as text
+                BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream));
+                StringBuilder content = new StringBuilder();
+                String line;
+
+                while ((line = reader.readLine()) != null) {
+                    content.append(line).append("\n");
+                }
+
+                reader.close();
+                result.put("content", content.toString());
             }
 
-            reader.close();
             inputStream.close();
-
-            JSObject result = new JSObject();
-            result.put("content", content.toString());
             call.resolve(result);
 
         } catch (Exception e) {

@@ -48,9 +48,10 @@ export interface DocumentProviderPlugin {
    * Read file contents
    *
    * @param options.uri - File URI
-   * @returns File contents as string
+   * @param options.asBase64 - If true, read as binary and return base64-encoded
+   * @returns File contents as string (text or base64)
    */
-  readFile(options: { uri: string }): Promise<{ content: string }>;
+  readFile(options: { uri: string; asBase64?: boolean }): Promise<{ content: string }>;
 }
 
 /**
