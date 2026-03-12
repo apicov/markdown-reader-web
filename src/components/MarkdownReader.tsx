@@ -9,7 +9,7 @@
  * - Reading position persistence
  */
 
-import { useState, useEffect, useRef, useCallback, useMemo, memo } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo, memo } from 'react';
 import {
   Box,
   AppBar,
@@ -709,32 +709,51 @@ const MarkdownContent = memo(({
   fontSize: number;
   onMouseUp: () => void;
   ImageComponent: React.ComponentType<React.ImgHTMLAttributes<HTMLImageElement>>;
-}) => (
-  <Box
-    onMouseUp={onMouseUp}
-    sx={{
-      fontSize: `${fontSize}px`,
-      lineHeight: 1.6,
-      '& h1': { fontSize: `${fontSize * 1.8}px` },
-      '& h2': { fontSize: `${fontSize * 1.5}px` },
-      '& h3': { fontSize: `${fontSize * 1.3}px` },
-      '& code': { fontSize: `${fontSize * 0.9}px` },
-      '& img': { maxWidth: '100%', height: 'auto' },
-      userSelect: 'text',
-      cursor: 'text',
-    }}
-  >
-    <ReactMarkdown
-      remarkPlugins={[remarkMath, remarkGfm]}
-      rehypePlugins={[rehypeRaw, rehypeKatex]}
-      components={{
-        img: ImageComponent,
+}) => {
+  // Track heading index for IDs
+  let headingIndex = 0;
+
+  // Custom heading component that adds IDs
+  const HeadingComponent = (level: number) => {
+    return ({ children, ...props }: any) => {
+      const id = `heading-${headingIndex++}`;
+      return React.createElement(`h${level}`, { id, ...props }, children);
+    };
+  };
+
+  return (
+    <Box
+      onMouseUp={onMouseUp}
+      sx={{
+        fontSize: `${fontSize}px`,
+        lineHeight: 1.6,
+        '& h1': { fontSize: `${fontSize * 1.8}px` },
+        '& h2': { fontSize: `${fontSize * 1.5}px` },
+        '& h3': { fontSize: `${fontSize * 1.3}px` },
+        '& code': { fontSize: `${fontSize * 0.9}px` },
+        '& img': { maxWidth: '100%', height: 'auto' },
+        userSelect: 'text',
+        cursor: 'text',
       }}
     >
-      {markdown}
-    </ReactMarkdown>
-  </Box>
-));
+      <ReactMarkdown
+        remarkPlugins={[remarkMath, remarkGfm]}
+        rehypePlugins={[rehypeRaw, rehypeKatex]}
+        components={{
+          img: ImageComponent,
+          h1: HeadingComponent(1),
+          h2: HeadingComponent(2),
+          h3: HeadingComponent(3),
+          h4: HeadingComponent(4),
+          h5: HeadingComponent(5),
+          h6: HeadingComponent(6),
+        }}
+      >
+        {markdown}
+      </ReactMarkdown>
+    </Box>
+  );
+});
 MarkdownContent.displayName = 'MarkdownContent';
 
 // Memoized translation bottom sheet to prevent re-renders
