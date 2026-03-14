@@ -716,7 +716,62 @@ const MarkdownContent = memo(({
   // Custom heading component that adds IDs
   const HeadingComponent = (level: number) => {
     return ({ children, ...props }: any) => {
-      const id = `heading-${headingIndex++}`;
+      let extractedId: string | null = null;
+
+      // Function to extract ID from text content like '<span id="my-id"></span>'
+      const extractIdFromText = (text: string): string | null => {
+        const match = text.match(/<span\s+id="([^"]+)"><\/span>/);
+        return match ? match[1] : null;
+      };
+
+      // Recursive function to search for ID
+      const findId = (node: any): string | null => {
+        if (!node) return null;
+
+        // If it's a string, check for <span id="..."></span> pattern
+        if (typeof node === 'string') {
+          const id = extractIdFromText(node);
+          if (id) return id;
+        }
+
+        // Check if this node is a span with id (when rehypeRaw is used)
+        if (node.type === 'span' && node.props?.id) {
+          return node.props.id;
+        }
+
+        // Check children
+        if (node.props?.children) {
+          const childArray = Array.isArray(node.props.children)
+            ? node.props.children
+            : [node.props.children];
+
+          for (const child of childArray) {
+            const foundId = findId(child);
+            if (foundId) return foundId;
+          }
+        }
+
+        return null;
+      };
+
+      // Search in children
+      const childArray = Array.isArray(children) ? children : [children];
+      for (const child of childArray) {
+        const foundId = findId(child);
+        if (foundId) {
+          extractedId = foundId;
+          break;
+        }
+      }
+
+      // Use extracted ID if found, otherwise generate sequential ID
+      const id = extractedId || `heading-${headingIndex++}`;
+
+      // Debug log
+      if (level === 2 && extractedId) {
+        console.log(`[HeadingComponent] h2 ID: ${extractedId}`);
+      }
+
       return React.createElement(`h${level}`, { id, ...props }, children);
     };
   };
@@ -738,7 +793,7 @@ const MarkdownContent = memo(({
     >
       <ReactMarkdown
         remarkPlugins={[remarkMath, remarkGfm]}
-        rehypePlugins={[rehypeRaw, rehypeKatex]}
+        rehypePlugins={[rehypeKatex, rehypeRaw]}
         components={{
           img: ImageComponent,
           h1: HeadingComponent(1),
