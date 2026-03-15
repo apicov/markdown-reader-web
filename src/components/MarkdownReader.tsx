@@ -512,7 +512,7 @@ export const MarkdownReader: React.FC<MarkdownReaderProps> = ({
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
       {/* App Bar */}
-      <AppBar position="static">
+      <AppBar position="fixed">
         <Toolbar>
           <IconButton color="inherit" onClick={onBack} edge="start" sx={{ mr: 2 }}>
             <BackIcon />
@@ -548,6 +548,7 @@ export const MarkdownReader: React.FC<MarkdownReaderProps> = ({
           overflow: 'auto',
           px: 3,
           py: 2,
+          mt: '64px', // Add top margin to account for fixed AppBar height
         }}
       >
         {isLoading ? (

@@ -216,7 +216,7 @@ export const DocumentListScreen: React.FC<DocumentListScreenProps> = ({
       overflow: 'hidden',
     }}>
       {/* App Bar */}
-      <AppBar position="static">
+      <AppBar position="fixed">
         <Toolbar>
           <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
             MarkLearn
@@ -248,6 +248,7 @@ export const DocumentListScreen: React.FC<DocumentListScreenProps> = ({
       <Container sx={{
         flex: 1,
         py: 3,
+        mt: '64px', // Add top margin to account for fixed AppBar height
         overflowY: 'auto',
         overflowX: 'hidden',
         overscrollBehaviorX: 'none',

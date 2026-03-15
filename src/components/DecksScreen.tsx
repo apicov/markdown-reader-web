@@ -187,7 +187,7 @@ export const DecksScreen: React.FC<DecksScreenProps> = ({
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
       {/* App Bar */}
-      <AppBar position="static">
+      <AppBar position="fixed">
         <Toolbar>
           <IconButton color="inherit" onClick={onBack} edge="start" sx={{ mr: 2 }}>
             <BackIcon />
@@ -204,7 +204,7 @@ export const DecksScreen: React.FC<DecksScreenProps> = ({
       </AppBar>
 
       {/* Content */}
-      <Container sx={{ flex: 1, py: 3, overflow: 'auto' }}>
+      <Container sx={{ flex: 1, py: 3, mt: '64px', overflow: 'auto' }}>
         {isLoading ? (
           <LoadingSpinner />
         ) : decks.length === 0 ? (

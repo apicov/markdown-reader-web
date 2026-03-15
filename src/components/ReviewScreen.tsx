@@ -101,7 +101,7 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({
   if (queue.length === 0) {
     return (
       <Box sx={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
-        <AppBar position="static">
+        <AppBar position="fixed">
           <Toolbar>
             <IconButton color="inherit" onClick={onBack} edge="start" sx={{ mr: 2 }}>
               <BackIcon />
@@ -112,14 +112,16 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({
           </Toolbar>
         </AppBar>
 
-        <EmptyState
-          title="All done! 🎉"
-          description="No cards due for review right now."
-          action={{
-            label: "Back to Decks",
-            onClick: onBack,
-          }}
-        />
+        <Box sx={{ mt: '64px' }}>
+          <EmptyState
+            title="All done! 🎉"
+            description="No cards due for review right now."
+            action={{
+              label: "Back to Decks",
+              onClick: onBack,
+            }}
+          />
+        </Box>
       </Box>
     );
   }
@@ -138,7 +140,7 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
       {/* App Bar */}
-      <AppBar position="static">
+      <AppBar position="fixed">
         <Toolbar>
           <IconButton color="inherit" onClick={onBack} edge="start" sx={{ mr: 2 }}>
             <BackIcon />
@@ -163,6 +165,7 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({
           justifyContent: 'center',
           p: 3,
           gap: 3,
+          mt: '64px',
         }}
       >
         <Typography variant="caption" color="text.secondary">

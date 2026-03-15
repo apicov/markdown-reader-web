@@ -55,7 +55,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ onClose }) => {
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
       {/* App Bar */}
-      <AppBar position="static">
+      <AppBar position="fixed">
         <Toolbar>
           <IconButton color="inherit" onClick={onClose} edge="start" sx={{ mr: 2 }}>
             <BackIcon />
@@ -70,7 +70,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ onClose }) => {
       </AppBar>
 
       {/* Content */}
-      <Container sx={{ flex: 1, py: 3, overflow: 'auto' }}>
+      <Container sx={{ flex: 1, py: 3, mt: '64px', overflow: 'auto' }}>
         <Paper sx={{ p: 3 }}>
           <Typography variant="h6" gutterBottom>
             Document Settings
