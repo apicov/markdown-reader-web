@@ -10,6 +10,13 @@
  * - The `!` after getElementById is TypeScript's non-null assertion operator
  */
 
+// Polyfill for older browsers that don't support Object.hasOwn (ES2022)
+if (!Object.hasOwn) {
+  Object.hasOwn = function (obj: object, prop: PropertyKey) {
+    return Object.prototype.hasOwnProperty.call(obj, prop);
+  };
+}
+
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import App from './App.tsx'
